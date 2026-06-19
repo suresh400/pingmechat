@@ -1,18 +1,25 @@
-// routes
+import React, { useState } from "react";
 import Router from "./routes";
-// theme
-import ThemeProvider from './theme';
-// components
-import ThemeSettings from './components/settings';
+import ThemeProvider from "./theme";
+import ThemeSettings from "./components/settings";
+import { AuthProvider } from "./contexts/AuthContext";
+import { SocketProvider } from "./contexts/SocketContext";
+import SplashScreen from "./components/SplashScreen";
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
-    <ThemeProvider>
-      <ThemeSettings>
-        {" "}
-        <Router />{" "}
-      </ThemeSettings>
-    </ThemeProvider>
+    <AuthProvider>
+      <SocketProvider>
+        <ThemeProvider>
+          <ThemeSettings>
+            {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
+            <Router />
+          </ThemeSettings>
+        </ThemeProvider>
+      </SocketProvider>
+    </AuthProvider>
   );
 }
 
