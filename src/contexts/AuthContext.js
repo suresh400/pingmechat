@@ -3,6 +3,12 @@ import { API_BASE } from "../constants";
 
 const AuthContext = createContext(null);
 
+// Extract a readable error message from both {message} and {errors:[{msg}]} shapes
+const extractError = (data, fallback) =>
+    data?.message ||
+    (Array.isArray(data?.errors) && data.errors.length > 0 ? data.errors[0].msg : null) ||
+    fallback;
+
 export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(() => {
         try {
@@ -21,7 +27,7 @@ export const AuthProvider = ({ children }) => {
             body: JSON.stringify({ email, password }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Login failed");
+        if (!res.ok) throw new Error(extractError(data, "Login failed"));
         localStorage.setItem("chatapp_token", data.token);
         localStorage.setItem("chatapp_user", JSON.stringify(data.user));
         setToken(data.token);
@@ -36,7 +42,7 @@ export const AuthProvider = ({ children }) => {
             body: JSON.stringify({ username, email, password }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Registration failed");
+        if (!res.ok) throw new Error(extractError(data, "Registration failed"));
         localStorage.setItem("chatapp_token", data.token);
         localStorage.setItem("chatapp_user", JSON.stringify(data.user));
         setToken(data.token);

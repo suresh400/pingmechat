@@ -21,3 +21,6 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# PingMe JSON data store (local data — do not commit)
+server/data/db.json
