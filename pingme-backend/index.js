@@ -32,11 +32,12 @@ const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || "";
 
 // ── CORS origin list ─────────────────────────────────────────────────────────
 // FRONTEND_URL is set to your Vercel URL in .env (see .env for instructions)
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const rawFrontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+const frontendUrls = rawFrontendUrl.split(",").map(url => url.trim().replace(/\/$/, ""));
 const ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    FRONTEND_URL,
+    ...frontendUrls
 ].filter(Boolean);
 
 const app = express();
