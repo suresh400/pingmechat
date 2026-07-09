@@ -41,8 +41,8 @@ export default function Router() {
     { path: "/", element: <LandingPage /> },
 
     // ── Auth pages (redirect to dashboard if already logged in) ──
-    { path: "/login", element: <Navigate to="/" state={{ authMode: "login" }} replace /> },
-    { path: "/register", element: <Navigate to="/" state={{ authMode: "register" }} replace /> },
+    { path: "/login", element: <GuestRoute><LoginPage /></GuestRoute> },
+    { path: "/register", element: <GuestRoute><RegisterPage /></GuestRoute> },
     { path: "/forgot-password", element: <GuestRoute><ForgotPasswordPage /></GuestRoute> },
     { path: "/verify-otp", element: <OTPVerificationPage /> },
     { path: "/reset-password", element: <ResetPasswordPage /> },
@@ -72,6 +72,8 @@ const CallHistoryPage = Loadable(lazy(() => import("../pages/dashboard/CallHisto
 const SettingsPage = Loadable(lazy(() => import("../pages/dashboard/SettingsPage")));
 const TasksPage = Loadable(lazy(() => import("../pages/dashboard/TasksPage")));
 const Page404 = Loadable(lazy(() => import("../pages/Page404")));
+const LoginPage = Loadable(lazy(() => import("../pages/auth/LoginPage")));
+const RegisterPage = Loadable(lazy(() => import("../pages/auth/RegisterPage")));
 const ForgotPasswordPage = Loadable(lazy(() => import("../pages/auth/ForgotPasswordPage")));
 const OTPVerificationPage = Loadable(lazy(() => import("../pages/auth/OTPVerificationPage")));
 const ResetPasswordPage = Loadable(lazy(() => import("../pages/auth/ResetPasswordPage")));

@@ -99,3 +99,212 @@ PingMe server running on port 5000
 [HTTP] GET /api/users/1/profile - body: undefined
 [Presence] User 3 DISCONNECTED (socket: 34LGp9bsijRU6EYUAAAI, remaining: 0)
 [Presence] DB UPDATE SUCCESS for User 3: is_online=0 (affectedRows: 1)
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/check-username?username=shjs - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] POST /api/auth/register - body: {
+  username: 'shjs',
+  email: 'chsuresh.as.01@gmail.com',
+  password: 'sU@123456'
+}
+[REGISTRATION OTP] Code for chsureshas01@gmail.com: 988798
+[Mailer] Sending verification email to: chsureshas01@gmail.com
+[HTTP] GET /api/auth/users-count - body: undefined
+[Mailer] Verification email sent: <3a05875e-89af-87ba-e9ae-5e936dd00353@gmail.com>
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] POST /api/auth/register - body: {
+  username: 'testregistration',
+  email: 'chsureshas01@gmail.com',
+  password: 'testpassword123'
+}
+[REGISTRATION OTP] Code for chsureshas01@gmail.com: 688467
+[Mailer] Sending verification email to: chsureshas01@gmail.com
+[HTTP] GET /api/auth/users-count - body: undefined
+[Mailer] Verification email sent: <31baedb6-c908-1001-073a-d3af47289574@gmail.com>
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] POST /api/auth/register - body: {
+  username: 'testregistration',
+  email: 'chsureshas01@gmail.com',
+  password: 'testpassword123',
+  otp: '688467'
+}
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/check-username?username=mah - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/check-username?username=mahi - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] POST /api/auth/register - body: {
+  username: 'mahi',
+  email: 'chsuresh.as.01@gmail.com',
+  password: 'chettukindi'
+}
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/check-username?username=chsuresh3839 - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] POST /api/auth/register - body: {
+  username: 'chsuresh3839',
+  email: 'suresh@gmail.com',
+  password: '12210779'
+}
+[REGISTRATION OTP] Code for suresh@gmail.com: 894573
+[Mailer] Sending verification email to: suresh@gmail.com
+[HTTP] GET /api/auth/users-count - body: undefined
+[Mailer] Verification email sent: <ffc1a6d2-7e6e-00c0-b101-9b6c145942b5@gmail.com>

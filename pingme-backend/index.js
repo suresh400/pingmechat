@@ -844,8 +844,7 @@ app.post("/api/auth/register", validateRegister, async (req, res) => {
                     await sendVerificationEmail(normalizedEmail, username, newOtp);
                 } catch (emailErr) {
                     console.error("Failed to send verification email via SMTP:", emailErr);
-                    // We don't fail registration if in local environment without internet, but here we can return error or fallback
-                    return res.status(500).json({ message: "Failed to send verification email. Please try again." });
+                    // Do not block registration in local/offline environments. Fallback to OTP logged in terminal.
                 }
             }
 

@@ -311,12 +311,16 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (location.state?.authMode) {
+      if (isAuthenticated) {
+        navigate("/app", { replace: true });
+        return;
+      }
       setAuthMode(location.state.authMode);
       setShowAuthModal(true);
       // Clear location state so refreshes/navigations don't trigger the modal again
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location, navigate]);
+  }, [location, navigate, isAuthenticated]);
 
   const navItems = [
     {

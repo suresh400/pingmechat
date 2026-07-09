@@ -342,7 +342,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
                     }
                   }} />
                   <Typography variant="caption" sx={{ color: "rgba(255, 255, 255, 0.6)", fontWeight: 600, fontSize: 11 }}>
-                    Registered Members: <span style={{ color: "#fff", fontWeight: 800 }}>{userCount}</span>
+                    Active Users: <span style={{ color: "#fff", fontWeight: 800 }}>{userCount}</span>
                   </Typography>
                 </Box>
               </Box>
@@ -580,6 +580,35 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
                 Sign In
               </Link>
             </Typography>
+
+            {/* Active users display */}
+            {userCount !== null && (
+              <Box sx={{ mt: 3.5, display: "flex", justifyContent: "center" }}>
+                <Box sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 1.2,
+                  bgcolor: "rgba(255, 255, 255, 0.04)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  borderRadius: "20px",
+                  px: 2,
+                  py: 0.6,
+                }}>
+                  <Box sx={{
+                    width: 7, height: 7, borderRadius: "50%", bgcolor: "#4CAF50",
+                    animation: "pulse 1.8s infinite",
+                    "@keyframes pulse": {
+                      "0%": { transform: "scale(0.95)", boxShadow: "0 0 0 0 rgba(76, 175, 80, 0.7)" },
+                      "70%": { transform: "scale(1)", boxShadow: "0 0 0 6px rgba(76, 175, 80, 0)" },
+                      "100%": { transform: "scale(0.95)", boxShadow: "0 0 0 0 rgba(76, 175, 80, 0)" }
+                    }
+                  }} />
+                  <Typography variant="caption" sx={{ color: "rgba(255, 255, 255, 0.6)", fontWeight: 600, fontSize: 11 }}>
+                    Active Users: <span style={{ color: "#fff", fontWeight: 800 }}>{userCount}</span>
+                  </Typography>
+                </Box>
+              </Box>
+            )}
           </div>
 
         </div>

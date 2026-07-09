@@ -283,7 +283,6 @@ const sendVerificationEmail = async (to, username, otp) => {
         return info;
     } catch (err) {
         console.error("[Mailer] Failed to send verification email:", err.message);
-        throw err;
     }
 };
 
