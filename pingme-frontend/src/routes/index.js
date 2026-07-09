@@ -16,7 +16,7 @@ const STATIC_EXTENSIONS = /\.(xml|txt|json|ico|png|jpg|jpeg|svg|webp|woff|woff2|
 const StaticFileGuard = () => {
   const { pathname } = useLocation();
   if (STATIC_EXTENSIONS.test(pathname)) return null;
-  return <Navigate to="/login" replace />;
+  return <Navigate to="/" replace />;
 };
 
 const Loadable = (Component) => (props) => (
@@ -27,7 +27,7 @@ const Loadable = (Component) => (props) => (
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+  return isAuthenticated ? children : <Navigate to="/" replace />;
 };
 
 const GuestRoute = ({ children }) => {
@@ -37,38 +37,41 @@ const GuestRoute = ({ children }) => {
 
 export default function Router() {
   return useRoutes([
-    { path: "/login", element: <GuestRoute><LoginPage /></GuestRoute> },
-    { path: "/register", element: <GuestRoute><RegisterPage /></GuestRoute> },
-    // Password reset flow — accessible to unauthenticated users only
+    // ── Public landing page ──
+    { path: "/", element: <LandingPage /> },
+
+    // ── Auth pages (redirect to dashboard if already logged in) ──
+    { path: "/login", element: <Navigate to="/" state={{ authMode: "login" }} replace /> },
+    { path: "/register", element: <Navigate to="/" state={{ authMode: "register" }} replace /> },
     { path: "/forgot-password", element: <GuestRoute><ForgotPasswordPage /></GuestRoute> },
     { path: "/verify-otp", element: <OTPVerificationPage /> },
     { path: "/reset-password", element: <ResetPasswordPage /> },
+
+    // ── Protected dashboard (using a pathless layout route to keep /app, /groups, etc. flat) ──
     {
-      path: "/",
       element: <PrivateRoute><DashboardLayout /></PrivateRoute>,
       children: [
-        { element: <Navigate to={DEFAULT_PATH} replace />, index: true },
-        { path: "app", element: <GeneralApp /> },
-        { path: "groups", element: <GroupsPage /> },
-        { path: "calls", element: <CallHistoryPage /> },
-        { path: "settings", element: <SettingsPage /> },
-        { path: "tasks", element: <TasksPage /> },
-        { path: "404", element: <Page404 /> },
-        { path: "*", element: <Navigate to="/404" replace /> },
+        { path: "/app", element: <GeneralApp /> },
+        { path: "/groups", element: <GroupsPage /> },
+        { path: "/calls", element: <CallHistoryPage /> },
+        { path: "/tasks", element: <TasksPage /> },
+        { path: "/settings", element: <SettingsPage /> },
       ],
     },
+    
+    // ── 404 Pages ──
+    { path: "/404", element: <Page404 /> },
     { path: "*", element: <StaticFileGuard /> },
   ]);
 }
 
+const LandingPage = Loadable(lazy(() => import("../pages/LandingPage")));
 const GeneralApp = Loadable(lazy(() => import("../pages/dashboard/GeneralApp")));
 const GroupsPage = Loadable(lazy(() => import("../pages/dashboard/GroupsPage")));
 const CallHistoryPage = Loadable(lazy(() => import("../pages/dashboard/CallHistoryPage")));
 const SettingsPage = Loadable(lazy(() => import("../pages/dashboard/SettingsPage")));
 const TasksPage = Loadable(lazy(() => import("../pages/dashboard/TasksPage")));
 const Page404 = Loadable(lazy(() => import("../pages/Page404")));
-const LoginPage = Loadable(lazy(() => import("../pages/auth/LoginPage")));
-const RegisterPage = Loadable(lazy(() => import("../pages/auth/RegisterPage")));
 const ForgotPasswordPage = Loadable(lazy(() => import("../pages/auth/ForgotPasswordPage")));
 const OTPVerificationPage = Loadable(lazy(() => import("../pages/auth/OTPVerificationPage")));
 const ResetPasswordPage = Loadable(lazy(() => import("../pages/auth/ResetPasswordPage")));

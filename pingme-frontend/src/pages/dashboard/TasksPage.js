@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Box, Stack, Typography, Grid, Paper, Button, IconButton, TextField,
   Select, MenuItem, InputLabel, FormControl, Dialog, DialogTitle,
-  DialogContent, DialogActions, Chip, useTheme, Card, CardContent, Divider
+  DialogContent, DialogActions, Chip, useTheme, Card, CardContent, Divider,
+  Tooltip
 } from "@mui/material";
 import { Plus, Trash, ListChecks, CheckCircle, PlayCircle, Circle } from "phosphor-react";
 import { useAuth } from "../../contexts/AuthContext";
@@ -206,20 +207,28 @@ export default function TasksPage() {
           <Stack spacing={2} sx={{ flexGrow: 1, overflowY: "auto" }}>
             {filtered.map(task => (
               <Card
-                key={task._id || task.id}
+                key={task.id}
                 draggable
-                onDragStart={(e) => handleDragStart(e, task._id || task.id)}
+                onDragStart={(e) => handleDragStart(e, task.id)}
                 sx={{
                   bgcolor: "background.paper",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                  boxShadow: isDark ? "0 2px 8px rgba(0,0,0,0.4)" : "0 2px 8px rgba(0,0,0,0.04)",
                   cursor: "grab",
                   border: "1px solid",
                   borderColor: "divider",
-                  "&:hover": { boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }
+                  borderRadius: 2,
+                  transition: "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
+                  "&:hover": {
+                    transform: "translateY(-2px)",
+                    boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.5)" : "0 8px 24px rgba(0,0,0,0.08)",
+                    borderColor: colStatus === "todo" ? "text.disabled" : (colStatus === "in_progress" ? "warning.main" : "success.main")
+                  }
                 }}
               >
-                <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-                  <Typography variant="subtitle2" fontWeight={600} mb={0.5}>{task.title}</Typography>
+                <CardContent sx={{ p: 2, "&:last-child": { pb: 1.5 } }}>
+                  <Typography variant="subtitle2" fontWeight={700} mb={0.5} sx={{ color: "text.primary", textDecoration: colStatus === "done" ? "line-through" : "none", opacity: colStatus === "done" ? 0.7 : 1 }}>
+                    {task.title}
+                  </Typography>
                   {task.description && (
                     <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13, wordBreak: "break-word" }}>
                       {task.description}
@@ -229,25 +238,33 @@ export default function TasksPage() {
                   <Stack direction="row" justifyContent="space-between" alignItems="center" mt={2}>
                     <Stack direction="row" spacing={0.5}>
                       {colStatus !== "todo" && (
-                        <IconButton size="small" onClick={() => handleUpdateStatus(task._id || task.id, "todo")} title="Move to Todo">
-                          <Circle size={16} />
-                        </IconButton>
+                        <Tooltip title="Mark as To Do">
+                          <IconButton size="small" onClick={() => handleUpdateStatus(task.id, "todo")} sx={{ color: "text.disabled", "&:hover": { color: "text.primary" } }}>
+                            <Circle size={16} />
+                          </IconButton>
+                        </Tooltip>
                       )}
                       {colStatus !== "in_progress" && (
-                        <IconButton size="small" onClick={() => handleUpdateStatus(task._id || task.id, "in_progress")} title="Move to In Progress">
-                          <PlayCircle size={16} />
-                        </IconButton>
+                        <Tooltip title="Mark as In Progress">
+                          <IconButton size="small" onClick={() => handleUpdateStatus(task.id, "in_progress")} sx={{ color: "text.disabled", "&:hover": { color: "warning.main" } }}>
+                            <PlayCircle size={16} />
+                          </IconButton>
+                        </Tooltip>
                       )}
                       {colStatus !== "done" && (
-                        <IconButton size="small" onClick={() => handleUpdateStatus(task._id || task.id, "done")} title="Move to Done">
-                          <CheckCircle size={16} color="#34C759" />
-                        </IconButton>
+                        <Tooltip title="Mark as Done">
+                          <IconButton size="small" onClick={() => handleUpdateStatus(task.id, "done")} sx={{ color: "text.disabled", "&:hover": { color: "success.main" } }}>
+                            <CheckCircle size={16} />
+                          </IconButton>
+                        </Tooltip>
                       )}
                     </Stack>
 
-                    <IconButton size="small" color="error" onClick={() => handleDeleteTask(task._id || task.id)}>
-                      <Trash size={16} />
-                    </IconButton>
+                    <Tooltip title="Delete Task">
+                      <IconButton size="small" color="error" onClick={() => handleDeleteTask(task.id)} sx={{ opacity: 0.6, "&:hover": { opacity: 1 } }}>
+                        <Trash size={16} />
+                      </IconButton>
+                    </Tooltip>
                   </Stack>
                 </CardContent>
               </Card>

@@ -167,7 +167,7 @@ const ForgotPasswordPage = () => {
                     <ArrowLeft size={16} color="rgba(255, 255, 255, 0.6)" />
                     <Link
                         component="button"
-                        onClick={() => navigate("/login")}
+                        onClick={() => navigate("/", { state: { authMode: "login" }, replace: true })}
                         sx={{ color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
                     >
                         Back to Login

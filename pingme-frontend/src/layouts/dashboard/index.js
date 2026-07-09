@@ -175,7 +175,7 @@ const DashboardLayout = () => {
     navigate(item.path);
   };
 
-  const handleLogout = () => { logout(); navigate("/login"); };
+  const handleLogout = () => { logout(); navigate("/"); };
 
   return (
     <Stack direction={isMobile ? "column" : "row"} sx={{ height: "100vh", width: "100vw", overflow: "hidden" }}>

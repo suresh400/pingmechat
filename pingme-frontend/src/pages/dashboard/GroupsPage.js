@@ -554,7 +554,7 @@ const GroupsPage = () => {
                                                     {(() => {
                                                         const messageText = String(msg.message || "").trim();
                                                         const looksLikeLink = messageText.startsWith("http");
-                                                        const isUpload = messageText.includes("/uploads") || messageText.includes("\\uploads");
+                                                        const isUpload = messageText.includes("/uploads") || messageText.includes("\\uploads") || messageText.includes("cloudinary.com");
                                                         const isImage = messageText.match(/\.(png|jpg|jpeg|gif|webp|bmp|svg)(\?.*)?$/i);
                                                         const isVideo = messageText.match(/\.(webm|mp4|ogg)(\?.*)?$/i);
 
@@ -596,6 +596,7 @@ const GroupsPage = () => {
                                                         <SelfDestructCountdown
                                                             messageId={msg.id}
                                                             seconds={msg.self_destruct_seconds}
+                                                            createdAt={msg.created_at}
                                                             isGroup={true}
                                                             chatId={activeGroup.id}
                                                             authFetch={authFetch}
@@ -643,11 +644,7 @@ const GroupsPage = () => {
                         </Stack>
                         <Box sx={{ p: 2, pb: isMobile ? 8 : 2, bgcolor: "background.default", borderTop: "1px solid", borderColor: "divider" }}>
                             <Stack direction="row" spacing={2} alignItems="center">
-                                <Tooltip title="Settings">
-                                    <IconButton onClick={() => navigate("/settings")} sx={{ color: "text.secondary" }}>
-                                        <Gear size={24} weight="bold" />
-                                    </IconButton>
-                                </Tooltip>
+
                                 <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", bgcolor: "background.paper", p: "6px 12px", borderRadius: 3, boxShadow: "0 2px 8px rgba(0,0,0,0.05)", position: "relative", border: "1px solid", borderColor: "divider" }}>
                                     <Box sx={{ position: "absolute", bottom: "100%", right: 0, mb: 1, display: showEmojiPicker ? "block" : "none", zIndex: 10 }}>
                                         <EmojiPicker

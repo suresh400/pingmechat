@@ -87,6 +87,24 @@ const {
 
 require("dotenv").config();
 
+// Cloudinary configuration
+const cloudinary = require("cloudinary").v2;
+const useCloudinary =
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_CLOUD_NAME !== "your_cloud_name" &&
+    process.env.CLOUDINARY_CLOUD_NAME !== "";
+
+if (useCloudinary) {
+    cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+    console.log("[Cloudinary] Configured successfully.");
+} else {
+    console.log("[Cloudinary] Not configured or using placeholders. Falling back to local storage.");
+}
+
 const AGORA_APP_ID = process.env.AGORA_APP_ID || "";
 const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || "";
 
@@ -128,22 +146,31 @@ app.get("/uploads/:filename", async (req, res, next) => {
             return res.status(404).send("File not found");
         }
         
-        // Ensure data is a native Buffer
-        const fileBuffer = Buffer.isBuffer(attachment.data)
-            ? attachment.data
-            : Buffer.from(attachment.data.buffer || attachment.data);
-
-        // Cache the file locally so express.static handles it next time
-        const localPath = path.join(__dirname, "uploads", filename);
-        try {
-            fs.writeFileSync(localPath, fileBuffer);
-        } catch (writeErr) {
-            console.error("[Fallback] Failed to write local cache file:", writeErr);
+        // If the attachment has a Cloudinary URL, redirect to it
+        if (attachment.url) {
+            return res.redirect(attachment.url);
         }
-        res.setHeader("Content-Type", attachment.mime_type || "application/octet-stream");
-        return res.send(fileBuffer);
+
+        // Fallback for legacy database-stored binary buffers
+        if (attachment.data) {
+            const fileBuffer = Buffer.isBuffer(attachment.data)
+                ? attachment.data
+                : Buffer.from(attachment.data.buffer || attachment.data);
+
+            // Cache the file locally so express.static handles it next time
+            const localPath = path.join(__dirname, "uploads", filename);
+            try {
+                fs.writeFileSync(localPath, fileBuffer);
+            } catch (writeErr) {
+                console.error("[Fallback] Failed to write local cache file:", writeErr);
+            }
+            res.setHeader("Content-Type", attachment.mime_type || "application/octet-stream");
+            return res.send(fileBuffer);
+        }
+
+        return res.status(404).send("File content not found");
     } catch (err) {
-        console.error("[Fallback] Error serving file from DB:", err);
+        console.error("[Fallback] Error serving file:", err);
         return next(err);
     }
 });
@@ -1237,20 +1264,40 @@ app.get("/api/contacts/blocked", verifyToken, async (req, res) => {
 app.post("/api/upload", verifyToken, upload.single("file"), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded." });
     
-    try {
-        const fileBuffer = fs.readFileSync(req.file.path);
-        await db.saveAttachment(req.file.filename, req.file.mimetype, fileBuffer);
-    } catch (err) {
-        console.error("Error storing upload in DB:", err);
-        return res.status(500).json({ message: "Failed to store file permanently." });
+    if (!useCloudinary) {
+        // Clean up the local temp file immediately to avoid storing files on the server
+        try {
+            fs.unlinkSync(req.file.path);
+        } catch (unlinkErr) {}
+        return res.status(400).json({ message: "Cloudinary is not configured on this server. Storage of media files is disabled." });
     }
 
-    // Return a full absolute URL so the avatar works in production (not just localhost)
-    const baseUrl = process.env.BASE_URL ||
-        (process.env.RENDER_EXTERNAL_URL) ||
-        `${req.protocol}://${req.get("host")}`;
-    const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
-    res.json({ url: fileUrl });
+    try {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+            resource_type: "auto",
+            folder: "pingme"
+        });
+        
+        // Clean up the local temp file saved by multer
+        try {
+            fs.unlinkSync(req.file.path);
+        } catch (unlinkErr) {
+            console.error("[Cloudinary] Temp file clean up error:", unlinkErr.message);
+        }
+
+        // Store only the Cloudinary URL in MongoDB (no binary buffer)
+        await db.saveAttachment(req.file.filename, req.file.mimetype, result.secure_url);
+
+        console.log("[Cloudinary] Upload success:", result.secure_url);
+        return res.json({ url: result.secure_url });
+    } catch (err) {
+        console.error("[Cloudinary] Upload failed:", err);
+        // Clean up the local temp file even on error
+        try {
+            fs.unlinkSync(req.file.path);
+        } catch (unlinkErr) {}
+        return res.status(500).json({ message: "Failed to upload file to Cloudinary." });
+    }
 });
 
 
@@ -1877,4 +1924,12 @@ app.get("/api/calls/history", verifyToken, async (req, res) => {
     }
 });
 
-server.listen(PORT, "0.0.0.0", () => console.log(`PingMe server running on port ${PORT}`));
+server.listen(PORT, "0.0.0.0", () => {
+    console.log(`PingMe server running on port ${PORT}`);
+    // Start self-destruct periodic cleanup job
+    setInterval(() => {
+        if (db.cleanExpiredMessages) {
+            db.cleanExpiredMessages(io);
+        }
+    }, 5000);
+});

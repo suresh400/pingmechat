@@ -145,7 +145,7 @@ const AttachmentSchema = new mongoose.Schema({
   id: { type: Number, unique: true },
   filename: { type: String, unique: true },
   mime_type: { type: String },
-  data: { type: Buffer },
+  url: { type: String },
   created_at: { type: Date, default: Date.now }
 });
 const Attachment = mongoose.model("Attachment", AttachmentSchema);
@@ -291,6 +291,27 @@ async function activeContacts(userId) {
 async function messageHistory(uid, cid) {
   const u = Number(uid);
   const c = Number(cid);
+
+  // Clean up expired self-destruct direct messages on the fly
+  const now = Date.now();
+  try {
+    const expiredDirect = await Message.find({
+      self_destruct_seconds: { $gt: 0 },
+      $or: [
+        { sender_id: u, receiver_id: c },
+        { sender_id: c, receiver_id: u }
+      ]
+    }).lean();
+    for (const m of expiredDirect) {
+      const expiry = new Date(m.created_at).getTime() + m.self_destruct_seconds * 1000;
+      if (expiry < now) {
+        await Message.deleteOne({ id: m.id });
+      }
+    }
+  } catch (err) {
+    console.error("[SelfDestruct] Error cleaning expired direct messages on-the-fly:", err);
+  }
+
   const messages = await Message.find({
     $or: [
       { sender_id: u, receiver_id: c },
@@ -504,7 +525,25 @@ async function handleSelect(sl, p) {
   }
 
   if (sl.includes("from group_messages") && sl.includes("join users")) {
-    const msgs = await GroupMessage.find({ group_id: Number(p[0]) }).lean();
+    const groupId = Number(p[0]);
+    // Clean up expired group messages on the fly
+    const now = Date.now();
+    try {
+      const expiredGroup = await GroupMessage.find({
+        group_id: groupId,
+        self_destruct_seconds: { $gt: 0 }
+      }).lean();
+      for (const m of expiredGroup) {
+        const expiry = new Date(m.created_at).getTime() + m.self_destruct_seconds * 1000;
+        if (expiry < now) {
+          await GroupMessage.deleteOne({ id: m.id });
+        }
+      }
+    } catch (err) {
+      console.error("[SelfDestruct] Error cleaning expired group messages on-the-fly:", err);
+    }
+
+    const msgs = await GroupMessage.find({ group_id: groupId }).lean();
     const results = [];
     for (const m of msgs) {
       const u = await User.findOne({ id: m.sender_id }).lean() || {};
@@ -839,17 +878,17 @@ const db = {
     if (sl.startsWith("delete")) return await handleDelete(sl, params);
     throw new Error(`[DB] Unsupported: ${sl.substring(0, 80)}`);
   },
-  saveAttachment: async (filename, mimeType, buffer) => {
+  saveAttachment: async (filename, mimeType, url) => {
     try {
       const id = await nextId("attachments");
       await Attachment.updateOne(
         { filename },
-        { id, filename, mime_type: mimeType, data: buffer },
+        { id, filename, mime_type: mimeType, url },
         { upsert: true }
       );
-      console.log(`[DB] Attachment ${filename} saved to MongoDB successfully.`);
+      console.log(`[DB] Attachment reference ${filename} -> ${url} saved to MongoDB successfully.`);
     } catch (err) {
-      console.error("[DB] Error saving attachment to MongoDB:", err);
+      console.error("[DB] Error saving attachment URL to MongoDB:", err);
       throw err;
     }
   },
@@ -900,6 +939,40 @@ const db = {
     } catch (err) {
       console.error("[DB] Error deleting task:", err);
       throw err;
+    }
+  },
+  cleanExpiredMessages: async (io) => {
+    try {
+      const now = Date.now();
+
+      // 1. Direct Messages
+      const directMsgs = await Message.find({ self_destruct_seconds: { $gt: 0 } }).lean();
+      for (const m of directMsgs) {
+        const expiry = new Date(m.created_at).getTime() + m.self_destruct_seconds * 1000;
+        if (expiry < now) {
+          await Message.deleteOne({ id: m.id });
+          console.log(`[SelfDestruct] Direct message ${m.id} deleted (expired).`);
+          if (io) {
+            io.to(`user_${m.receiver_id}`).emit("message_deleted", { messageId: String(m.id), chatId: m.sender_id, isGroup: false });
+            io.to(`user_${m.sender_id}`).emit("message_deleted", { messageId: String(m.id), chatId: m.receiver_id, isGroup: false });
+          }
+        }
+      }
+
+      // 2. Group Messages
+      const groupMsgs = await GroupMessage.find({ self_destruct_seconds: { $gt: 0 } }).lean();
+      for (const m of groupMsgs) {
+        const expiry = new Date(m.created_at).getTime() + m.self_destruct_seconds * 1000;
+        if (expiry < now) {
+          await GroupMessage.deleteOne({ id: m.id });
+          console.log(`[SelfDestruct] Group message ${m.id} deleted (expired).`);
+          if (io) {
+            io.to(`group_${m.group_id}`).emit("message_deleted", { messageId: String(m.id), chatId: m.group_id, isGroup: true });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[SelfDestruct] Error cleaning expired messages:", err);
     }
   }
 };

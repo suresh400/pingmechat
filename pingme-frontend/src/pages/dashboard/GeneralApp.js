@@ -643,7 +643,7 @@ const GeneralApp = () => {
     return `${BASE_URL}${path}`;
   };
 
-  const handleLogout = () => { stopMedia(); logout(); navigate("/login"); };
+  const handleLogout = () => { stopMedia(); logout(); navigate("/"); };
   const formatTime = (ts) => ts ? new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
   const formatLastSeen = (ts) => {
     if (!ts) return "Offline";
@@ -969,7 +969,7 @@ const GeneralApp = () => {
                                 {(() => {
                                   const messageText = String(msg.message || "").trim();
                                   const looksLikeLink = messageText.startsWith("http");
-                                  const isUpload = messageText.includes("/uploads") || messageText.includes("\\uploads");
+                                  const isUpload = messageText.includes("/uploads") || messageText.includes("\\uploads") || messageText.includes("cloudinary.com");
                                   const isImage = messageText.match(/\.(png|jpg|jpeg|gif|webp|bmp|svg)(\?.*)?$/i);
                                   const isVideo = messageText.match(/\.(webm|mp4|ogg)(\?.*)?$/i);
 
@@ -1043,6 +1043,7 @@ const GeneralApp = () => {
                                   <SelfDestructCountdown
                                     messageId={msg.id}
                                     seconds={msg.self_destruct_seconds}
+                                    createdAt={msg.created_at}
                                     isGroup={false}
                                     chatId={activeContact.id}
                                     authFetch={authFetch}
@@ -1313,13 +1314,7 @@ const GeneralApp = () => {
 
             <Box sx={{ p: 2, pb: isMobile ? 8 : 2, bgcolor: "background.default", borderTop: "1px solid", borderColor: "divider" }}>
               <Stack direction="row" spacing={1.5} alignItems="center">
-                {!isMobile && (
-                  <Tooltip title="Settings">
-                    <IconButton onClick={() => navigate("/settings")} sx={{ color: "text.secondary" }}>
-                      <Gear size={24} weight="bold" />
-                    </IconButton>
-                  </Tooltip>
-                )}
+
 
                 <Box sx={{ flexGrow: 1, display: "flex", alignItems: "center", bgcolor: "background.paper", p: "6px 12px", borderRadius: 3, boxShadow: "0 2px 8px rgba(0,0,0,0.05)", position: "relative", border: "1px solid", borderColor: "divider" }}>
                   <Box sx={{ position: "absolute", bottom: "100%", right: 0, mb: 1, display: showEmojiPicker ? "block" : "none", zIndex: 10 }}>

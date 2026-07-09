@@ -109,7 +109,7 @@ const ResetPasswordPage = () => {
                 return;
             }
             setSuccess(true);
-            setTimeout(() => navigate("/login"), 3000);
+            setTimeout(() => navigate("/", { state: { authMode: "login" }, replace: true }), 3000);
         } catch {
             setError("Network error. Please try again.");
         } finally {
@@ -176,18 +176,18 @@ const ResetPasswordPage = () => {
                         <Typography variant="h5" fontWeight={800} color="#fff">Password Reset!</Typography>
                         <Typography variant="body2" color="rgba(255, 255, 255, 0.6)" lineHeight={1.6}>
                             Your password has been reset successfully.<br />
-                            Redirecting to login in 3 seconds…
+                            Redirecting to home in 3 seconds…
                         </Typography>
                         <Button
                             variant="contained"
-                            onClick={() => navigate("/login")}
+                            onClick={() => navigate("/", { state: { authMode: "login" }, replace: true })}
                             sx={{
                                 bgcolor: "#fff", color: "#000", borderRadius: 2,
                                 textTransform: "none", fontWeight: 700,
                                 "&:hover": { bgcolor: "#e5e5e5" },
                             }}
                         >
-                            Go to Login Now
+                            Go to Home Now
                         </Button>
                     </Stack>
                 </Box>
@@ -367,7 +367,7 @@ const ResetPasswordPage = () => {
                     <ArrowLeft size={16} color="rgba(255, 255, 255, 0.6)" />
                     <Link
                         component="button"
-                        onClick={() => navigate("/login")}
+                        onClick={() => navigate("/", { state: { authMode: "login" }, replace: true })}
                         sx={{ color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
                     >
                         Back to Login

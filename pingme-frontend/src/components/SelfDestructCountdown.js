@@ -2,8 +2,18 @@ import React, { useState, useEffect } from "react";
 import { Stack, Typography } from "@mui/material";
 import { Hourglass } from "phosphor-react";
 
-export default function SelfDestructCountdown({ messageId, seconds, isGroup, chatId, authFetch, onDeleteLocal }) {
-  const [timeLeft, setTimeLeft] = useState(seconds);
+export default function SelfDestructCountdown({ messageId, seconds, createdAt, isGroup, chatId, authFetch, onDeleteLocal }) {
+  const getRemainingTime = () => {
+    if (!createdAt) return seconds;
+    const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
+    return Math.max(0, seconds - elapsed);
+  };
+
+  const [timeLeft, setTimeLeft] = useState(getRemainingTime);
+
+  useEffect(() => {
+    setTimeLeft(getRemainingTime());
+  }, [createdAt, seconds]);
 
   useEffect(() => {
     if (timeLeft <= 0) {
@@ -15,7 +25,7 @@ export default function SelfDestructCountdown({ messageId, seconds, isGroup, cha
     }
 
     const timer = setTimeout(() => {
-      setTimeLeft(timeLeft - 1);
+      setTimeLeft((prev) => Math.max(0, prev - 1));
     }, 1000);
 
     return () => clearTimeout(timer);
