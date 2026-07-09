@@ -292,6 +292,10 @@ async function messageHistory(uid, cid) {
   const u = Number(uid);
   const c = Number(cid);
 
+  if (isNaN(u) || isNaN(c)) {
+    return [];
+  }
+
   // Clean up expired self-destruct direct messages on the fly
   const now = Date.now();
   try {

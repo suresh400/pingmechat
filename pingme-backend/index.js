@@ -1543,6 +1543,9 @@ app.get("/api/messages/unread/total", verifyToken, async (req, res) => {
 // ─── MESSAGES ────────────────────────────────────────────────────────────────
 app.get("/api/messages/:contactId", verifyToken, async (req, res) => {
     const { contactId } = req.params;
+    if (isNaN(Number(contactId))) {
+        return res.status(400).json({ message: "Invalid contact ID." });
+    }
     const userId = req.user.id;
     try {
         const sql = `

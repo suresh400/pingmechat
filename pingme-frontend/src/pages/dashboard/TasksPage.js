@@ -31,7 +31,7 @@ export default function TasksPage() {
     const fetchChatsAndGroups = async () => {
       try {
         // Fetch active conversations
-        const resConvs = await authFetch(`${API_BASE}/messages/conversations`);
+        const resConvs = await authFetch(`${API_BASE}/contacts/active`);
         const convs = await resConvs.json();
         
         // Fetch groups

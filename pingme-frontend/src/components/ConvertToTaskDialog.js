@@ -19,7 +19,7 @@ export default function ConvertToTaskDialog({ open, onClose, messageText, curren
   useEffect(() => {
     const fetchBoards = async () => {
       try {
-        const resConvs = await authFetch(`${API_BASE}/messages/conversations`);
+        const resConvs = await authFetch(`${API_BASE}/contacts/active`);
         const convs = await resConvs.json();
         
         const resGroups = await authFetch(`${API_BASE}/groups`);
