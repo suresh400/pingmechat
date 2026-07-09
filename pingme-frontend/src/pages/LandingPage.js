@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import ScrollStack, { ScrollStackItem } from "../components/ScrollStack";
 import LightRays from "../components/LightRays";
 import AuthModal from "../components/AuthModal";
+import CardNav from "../components/CardNav";
 
 const DARK_BG = "#000000";
 const LIGHT_TEXT = "#FFFFFF";
@@ -303,7 +304,6 @@ export default function LandingPage() {
   const { isAuthenticated } = useAuth();
   const [openFaq, setOpenFaq] = useState(null);
   const [hoveredCard, setHoveredCard] = useState(null);
-  const [scrolled, setScrolled] = useState(false);
 
   // Auth modal state triggers
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -318,28 +318,53 @@ export default function LandingPage() {
     }
   }, [location, navigate]);
 
-  useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", fn);
-    return () => window.removeEventListener("scroll", fn);
-  }, []);
+  const navItems = [
+    {
+      label: "Explore",
+      bgColor: "rgba(255, 255, 255, 0.03)",
+      textColor: "#fff",
+      links: [
+        { label: "Features", ariaLabel: "App Features", onClick: () => scrollTo("features") },
+        { label: "How it Works", ariaLabel: "How it Works", onClick: () => scrollTo("howitworks") }
+      ]
+    },
+    {
+      label: "Help",
+      bgColor: "rgba(255, 255, 255, 0.03)",
+      textColor: "#fff",
+      links: [
+        { label: "FAQ", ariaLabel: "Frequently Asked Questions", onClick: () => scrollTo("faq") },
+        { label: "Dashboard", ariaLabel: "Go to app", onClick: () => navigate("/app") }
+      ]
+    },
+    {
+      label: "Contact",
+      bgColor: "rgba(255, 255, 255, 0.03)",
+      textColor: "#fff",
+      links: [
+        { label: "Email Support", ariaLabel: "Support", onClick: () => scrollTo("contact") },
+
+      ]
+    }
+  ];
+
+  const logoEl = (
+    <div style={styles.logo} onClick={() => scrollTo("hero")}>PingsMe</div>
+  );
 
   return (
     <div style={styles.root}>
       {/* ── NAV ── */}
-      <nav style={{ ...styles.nav, boxShadow: scrolled ? "0 4px 40px rgba(0,0,0,0.8)" : "none" }}>
-        <div style={styles.logo} onClick={() => scrollTo("hero")}>PingsMe</div>
-        <ul style={styles.navLinks}>
-          {[["Features", "features"], ["How it Works", "howitworks"], ["FAQ", "faq"], ["Contact", "contact"]].map(([label, id]) => (
-            <li key={id}>
-              <span style={styles.navLink} onClick={() => scrollTo(id)}
-                onMouseEnter={e => e.target.style.color = "#fff"}
-                onMouseLeave={e => e.target.style.color = "rgba(255,255,255,0.6)"}
-              >{label}</span>
-            </li>
-          ))}
-        </ul>
-        <button style={styles.navBtn} onClick={() => {
+      <CardNav
+        logo={logoEl}
+        logoAlt="PingsMe Logo"
+        items={navItems}
+        baseColor="rgba(15, 15, 15, 0.7)"
+        menuColor="#fff"
+        buttonBgColor="#fff"
+        buttonTextColor="#000"
+        ctaText={isAuthenticated ? "Dashboard" : "Get Started"}
+        onCtaClick={() => {
           if (isAuthenticated) {
             navigate("/app");
           } else {
@@ -347,11 +372,7 @@ export default function LandingPage() {
             setShowAuthModal(true);
           }
         }}
-          onMouseEnter={e => { e.target.style.transform = "scale(1.05)"; e.target.style.background = "#e5e5e5"; }}
-          onMouseLeave={e => { e.target.style.transform = "scale(1)"; e.target.style.background = WHITE_ACCENT; }}>
-          {isAuthenticated ? "Go to Dashboard" : "Get Started"}
-        </button>
-      </nav>
+      />
 
       {/* ── HERO ── */}
       <section id="hero" style={styles.hero}>
@@ -434,7 +455,7 @@ export default function LandingPage() {
           <p style={styles.sectionLabel}>How It Works</p>
           <h2 style={styles.sectionTitle}>Up and running in minutes</h2>
           <p style={styles.sectionSub}>No setup required. Just sign up and start connecting.</p>
-          
+
           <ScrollStack
             useWindowScroll={true}
             itemDistance={150}

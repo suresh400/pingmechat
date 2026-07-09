@@ -1,8 +1,101 @@
-◇ injected env (13) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
-◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (13) from .env // tip: ⌘ override existing { override: true }
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
 [Cloudinary] Configured successfully.
 PingMe server running on port 5000
 [DB] Connected to MongoDB Atlas successfully via Mongoose
 [DB] MongoDB Atlas has existing data, skipping migration.
-[Presence] User 3 CONNECTED (socket: H52ChkP7Q2hVtOtQAAAB, total: 1)
+[Presence] User 3 CONNECTED (socket: hcjrQKJ1mSnZFso6AAAB, total: 1)
 [Presence] User 3 is now ONLINE in DB (affectedRows: 1)
+[Presence] User 3 DISCONNECTED (socket: hcjrQKJ1mSnZFso6AAAB, remaining: 0)
+[Presence] DB UPDATE SUCCESS for User 3: is_online=0 (affectedRows: 1)
+[Presence] User 3 CONNECTED (socket: kPRWpsS90qRp7vEOAAAE, total: 1)
+[Presence] User 3 is now ONLINE in DB (affectedRows: 1)
+[HTTP] GET /api/messages/unread/total - body: undefined
+[HTTP] GET /api/messages/unread/total - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/contacts/blocked - body: undefined
+[HTTP] GET /api/contacts/blocked - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[Presence] User 3 DISCONNECTED (socket: kPRWpsS90qRp7vEOAAAE, remaining: 0)
+[Presence] DB UPDATE SUCCESS for User 3: is_online=0 (affectedRows: 1)
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] GET /api/auth/users-count - body: undefined
+[HTTP] POST /api/auth/login - body: { email: 'chsuresh3839@gmail.com', password: 'Su@123456' }
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/messages/unread/total - body: undefined
+[HTTP] GET /api/contacts/blocked - body: undefined
+[Presence] User 3 CONNECTED (socket: 34LGp9bsijRU6EYUAAAI, total: 1)
+[HTTP] GET /api/contacts/blocked - body: undefined
+[HTTP] GET /api/messages/unread/total - body: undefined
+[Presence] User 3 is now ONLINE in DB (affectedRows: 1)
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/tasks/personal_3 - body: undefined
+[HTTP] GET /api/tasks/personal_3 - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/groups - body: undefined
+[HTTP] GET /api/groups - body: undefined
+[HTTP] PUT /api/tasks/3 - body: { status: 'in_progress' }
+[HTTP] GET /api/tasks/personal_3 - body: undefined
+[HTTP] PUT /api/tasks/3 - body: { status: 'done' }
+[HTTP] GET /api/tasks/personal_3 - body: undefined
+[HTTP] PUT /api/tasks/3 - body: { status: 'todo' }
+[HTTP] GET /api/tasks/personal_3 - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/contacts/blocked - body: undefined
+[HTTP] GET /api/contacts/blocked - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/messages/4 - body: undefined
+[HTTP] GET /uploads/file-1783540927343-441955519.jpg - body: undefined
+[HTTP] GET /uploads/file-1783534792695-697934112.png - body: undefined
+[HTTP] GET /uploads/file-1783570005246-732775097.png - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/messages/unread/total - body: undefined
+[HTTP] GET /api/users/4/profile - body: undefined
+[HTTP] GET /api/users/1/profile - body: undefined
+[HTTP] GET /api/messages/1 - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/messages/unread/total - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/contacts/blocked - body: undefined
+[HTTP] GET /api/contacts/blocked - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/messages/4 - body: undefined
+[HTTP] GET /uploads/file-1783540927343-441955519.jpg - body: undefined
+[HTTP] GET /uploads/file-1783534792695-697934112.png - body: undefined
+[HTTP] GET /uploads/file-1783570005246-732775097.png - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/messages/unread/total - body: undefined
+[HTTP] PUT /api/auth/profile - body: {
+  username: 'suresh',
+  bio: 'hello',
+  avatar: 'https://res.cloudinary.com/dzphpwqgg/image/upload/v1783593801/pingme/doee9hsahelu7ymhoahv.jpg'
+}
+[HTTP] GET /api/messages/unread/total - body: undefined
+[HTTP] PUT /api/auth/profile - body: {
+  username: 'suresh',
+  bio: 'hello',
+  avatar: 'https://res.cloudinary.com/dzphpwqgg/image/upload/v1783593801/pingme/doee9hsahelu7ymhoahv.jpg'
+}
+[HTTP] GET /api/messages/unread/total - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/contacts/blocked - body: undefined
+[HTTP] GET /api/contacts/blocked - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/messages/4 - body: undefined
+[HTTP] GET /uploads/file-1783540927343-441955519.jpg - body: undefined
+[HTTP] GET /uploads/file-1783534792695-697934112.png - body: undefined
+[HTTP] GET /uploads/file-1783570005246-732775097.png - body: undefined
+[HTTP] GET /api/messages/1 - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/messages/unread/total - body: undefined
+[HTTP] GET /uploads/file-1783540927343-441955519.jpg - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/messages/unread/total - body: undefined
+[HTTP] GET /api/users/1/profile - body: undefined
+[Presence] User 3 DISCONNECTED (socket: 34LGp9bsijRU6EYUAAAI, remaining: 0)
+[Presence] DB UPDATE SUCCESS for User 3: is_online=0 (affectedRows: 1)

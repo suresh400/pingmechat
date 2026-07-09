@@ -110,11 +110,24 @@ const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || "";
 
 // ── CORS origin list ─────────────────────────────────────────────────────────
 // FRONTEND_URL is set to your Vercel URL in .env (see .env for instructions)
+const os = require("os");
+const networkInterfaces = os.networkInterfaces();
+const localIps = [];
+for (const interfaceName in networkInterfaces) {
+    for (const iface of networkInterfaces[interfaceName]) {
+        if (iface.family === "IPv4" && !iface.internal) {
+            localIps.push(`http://${iface.address}:3000`);
+            localIps.push(`http://${iface.address}:5000`);
+        }
+    }
+}
+
 const rawFrontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 const frontendUrls = rawFrontendUrl.split(",").map(url => url.trim().replace(/\/$/, ""));
 const ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    ...localIps,
     ...frontendUrls
 ].filter(Boolean);
 
@@ -1927,7 +1940,7 @@ app.get("/api/calls/history", verifyToken, async (req, res) => {
     }
 });
 
-server.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT, () => {
     console.log(`PingMe server running on port ${PORT}`);
     // Start self-destruct periodic cleanup job
     setInterval(() => {
