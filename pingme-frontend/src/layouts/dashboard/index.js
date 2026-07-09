@@ -1,7 +1,7 @@
 import { Avatar, Box, IconButton, Stack, Tooltip, Snackbar, Alert, useMediaQuery, useTheme, BottomNavigation, BottomNavigationAction, Paper, Badge } from "@mui/material";
 import React, { useState, useEffect, useCallback } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { ChatCircleDots, Users, PhoneCall, Gear, SignOut } from "phosphor-react";
+import { ChatCircleDots, Users, PhoneCall, Gear, SignOut, Kanban } from "phosphor-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSocket } from "../../contexts/SocketContext";
 import AgoraCallModal from "../../components/AgoraCallModal";
@@ -11,7 +11,8 @@ const NAV_ITEMS = [
   { index: 0, icon: <ChatCircleDots size={22} />, label: "Chats", path: "/app" },
   { index: 1, icon: <Users size={22} />, label: "Groups", path: "/groups" },
   { index: 2, icon: <PhoneCall size={22} />, label: "Calls", path: "/calls" },
-  { index: 3, icon: <Gear size={22} />, label: "Settings", path: "/settings" },
+  { index: 3, icon: <Kanban size={22} />, label: "Tasks", path: "/tasks" },
+  { index: 4, icon: <Gear size={22} />, label: "Settings", path: "/settings" },
 ];
 
 const DashboardLayout = () => {
@@ -23,6 +24,12 @@ const DashboardLayout = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const [totalUnread, setTotalUnread] = useState(0);
+
+  useEffect(() => {
+    const path = window.location.pathname;
+    const item = NAV_ITEMS.find((n) => n.path === path);
+    if (item) setSelected(item.index);
+  }, [navigate]);
 
   const fetchTotalUnread = useCallback(async () => {
     if (!currentUser) return;

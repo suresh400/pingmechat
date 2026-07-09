@@ -49,6 +49,9 @@ const SettingsProvider = ({ children }) => {
     themeContrast: initialState.themeContrast,
     themeDirection: initialState.themeDirection,
     themeColorPresets: initialState.themeColorPresets,
+    customPrimaryColor: "",
+    customChatBgColor: "",
+    customCss: "",
   });
 
   const isArabic = localStorage.getItem("i18nextLng") === "ar";
@@ -160,6 +163,30 @@ const SettingsProvider = ({ children }) => {
       themeContrast: initialState.themeContrast,
       themeDirection: initialState.themeDirection,
       themeColorPresets: initialState.themeColorPresets,
+      customPrimaryColor: "",
+      customChatBgColor: "",
+      customCss: "",
+    });
+  };
+
+  const onChangeCustomPrimaryColor = (color) => {
+    setSettings({
+      ...settings,
+      customPrimaryColor: color,
+    });
+  };
+
+  const onChangeCustomChatBgColor = (color) => {
+    setSettings({
+      ...settings,
+      customChatBgColor: color,
+    });
+  };
+
+  const onChangeCustomCss = (css) => {
+    setSettings({
+      ...settings,
+      customCss: css,
     });
   };
 
@@ -193,6 +220,14 @@ const SettingsProvider = ({ children }) => {
           name: color.name,
           value: color.main,
         })),
+
+        // Custom Styles
+        customPrimaryColor: settings.customPrimaryColor || "",
+        customChatBgColor: settings.customChatBgColor || "",
+        customCss: settings.customCss || "",
+        onChangeCustomPrimaryColor,
+        onChangeCustomChatBgColor,
+        onChangeCustomCss,
 
         // Reset
         onResetSetting,

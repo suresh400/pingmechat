@@ -11,6 +11,66 @@ const path = require("path");
 const fs = require("fs");
 const { RtcTokenBuilder, RtcRole } = require("agora-token");
 const { sendOTPEmail, sendFeedbackEmail, sendVerificationEmail } = require("./config/mailer");
+const https = require("https");
+
+function callGeminiAPI(prompt, apiKey) {
+    return new Promise((resolve, reject) => {
+        const data = JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+        });
+        const options = {
+            hostname: "generativelanguage.googleapis.com",
+            path: `/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(data)
+            }
+        };
+        const req = https.request(options, (res) => {
+            let body = "";
+            res.on("data", (chunk) => body += chunk);
+            res.on("end", () => {
+                try {
+                    const parsed = JSON.parse(body);
+                    const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+                    resolve(text);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        });
+        req.on("error", (e) => reject(e));
+        req.write(data);
+        req.end();
+    });
+}
+
+async function getAIReply(prompt) {
+    const cleanPrompt = prompt.replace(/^@ai\s+/i, "").trim();
+    if (process.env.GEMINI_API_KEY) {
+        try {
+            const reply = await callGeminiAPI(cleanPrompt, process.env.GEMINI_API_KEY);
+            if (reply) return reply;
+        } catch (apiErr) {
+            console.error("Gemini API call failed:", apiErr);
+        }
+    }
+    // Fallback/offline bot replies:
+    const lower = cleanPrompt.toLowerCase();
+    if (lower.includes("hello") || lower.includes("hi")) {
+        return "Hello! I am your PingMe AI Assistant. How can I help you today?";
+    } else if (lower.includes("help")) {
+        return "I can help you keep track of tasks, summarize chats, or answer general questions! Just type `@ai <your question>` in any chat.";
+    } else if (lower.includes("weather")) {
+        return "I don't have access to live weather data right now, but I hope it's sunny where you are!";
+    } else if (lower.includes("task") || lower.includes("todo")) {
+        return "You can convert any message to a task by right-clicking it, or view the live Kanban board in the side details panel!";
+    } else {
+        return `You asked: "${cleanPrompt}". I am currently running in offline assistant mode. Set GEMINI_API_KEY in your .env file to enable full Gemini AI capabilities!`;
+    }
+}
+
 const {
     validateRegister,
     validateLogin,
@@ -60,6 +120,34 @@ app.use((req, res, next) => {
 });
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+app.get("/uploads/:filename", async (req, res, next) => {
+    try {
+        const { filename } = req.params;
+        const attachment = await db.getAttachment(filename);
+        if (!attachment) {
+            return res.status(404).send("File not found");
+        }
+        
+        // Ensure data is a native Buffer
+        const fileBuffer = Buffer.isBuffer(attachment.data)
+            ? attachment.data
+            : Buffer.from(attachment.data.buffer || attachment.data);
+
+        // Cache the file locally so express.static handles it next time
+        const localPath = path.join(__dirname, "uploads", filename);
+        try {
+            fs.writeFileSync(localPath, fileBuffer);
+        } catch (writeErr) {
+            console.error("[Fallback] Failed to write local cache file:", writeErr);
+        }
+        res.setHeader("Content-Type", attachment.mime_type || "application/octet-stream");
+        return res.send(fileBuffer);
+    } catch (err) {
+        console.error("[Fallback] Error serving file from DB:", err);
+        return next(err);
+    }
+});
+
 // Ensure uploads directory exists
 const uploadDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadDir)) {
@@ -108,7 +196,7 @@ io.on("connection", (socket) => {
 
     // DM message
     socket.on("send_message", async (data) => {
-        const { sender_id, receiver_id, message, sender_name, sender_avatar } = data;
+        const { sender_id, receiver_id, message, sender_name, sender_avatar, self_destruct_seconds } = data;
         const sid = Number(sender_id);
         const rid = Number(receiver_id);
         console.log(`[socket] send_message attempt: ${sid} -> ${rid}`);
@@ -129,23 +217,56 @@ io.on("connection", (socket) => {
                 });
             }
 
+            const sds = Number(self_destruct_seconds) || 0;
             const [result] = await db.query(
-                "INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
-                [sid, rid, message]
+                "INSERT INTO messages (sender_id, receiver_id, message, self_destruct_seconds) VALUES (?, ?, ?, ?)",
+                [sid, rid, message, sds]
             );
             const payload = {
                 id: result.insertId,
-                sender_id: Number(sender_id),
-                receiver_id: Number(receiver_id),
+                sender_id: sid,
+                receiver_id: rid,
                 message,
                 sender_name,
                 sender_avatar,
+                self_destruct_seconds: sds,
                 created_at: new Date().toISOString(),
             };
             // Send to receiver's room
             io.to(`user_${receiver_id}`).emit("receive_message", payload);
             // Send back to sender (confirmation)
             socket.emit("receive_message", payload);
+
+            // Intercept @ai trigger
+            if (message.trim().toLowerCase().startsWith("@ai")) {
+                const aiText = await getAIReply(message);
+                const prefixText = `🤖 [AI]: ${aiText}`;
+                // Save AI response as if sent by the recipient (so it displays on left side)
+                const [aiResult] = await db.query(
+                    "INSERT INTO messages (sender_id, receiver_id, message, self_destruct_seconds) VALUES (?, ?, ?, ?)",
+                    [rid, sid, prefixText, 0]
+                );
+                
+                // Get recipient avatar/name
+                const [users] = await db.query("SELECT username, avatar FROM users WHERE id = ?", [rid]);
+                const peerName = users[0]?.username || "Peer";
+                const peerAvatar = users[0]?.avatar || "";
+
+                const aiPayload = {
+                    id: aiResult.insertId,
+                    sender_id: rid,
+                    receiver_id: sid,
+                    message: prefixText,
+                    sender_name: peerName,
+                    sender_avatar: peerAvatar,
+                    self_destruct_seconds: 0,
+                    created_at: new Date().toISOString(),
+                };
+                
+                // Emit to both
+                io.to(`user_${sid}`).emit("receive_message", aiPayload);
+                io.to(`user_${rid}`).emit("receive_message", { ...aiPayload, sender_id: rid, receiver_id: sid });
+            }
         } catch (err) {
             console.error("[send_message] Error:", err.message);
             socket.emit("error", { message: "Failed to send message" });
@@ -154,23 +275,56 @@ io.on("connection", (socket) => {
 
     // Group message
     socket.on("send_group_message", async (data) => {
-        const { group_id, sender_id, message, sender_name, sender_avatar } = data;
+        const { group_id, sender_id, message, sender_name, sender_avatar, self_destruct_seconds } = data;
+        const gid = Number(group_id);
         try {
+            const sds = Number(self_destruct_seconds) || 0;
             const [result] = await db.query(
-                "INSERT INTO group_messages (group_id, sender_id, message) VALUES (?, ?, ?)",
-                [group_id, sender_id, message]
+                "INSERT INTO group_messages (group_id, sender_id, message, self_destruct_seconds) VALUES (?, ?, ?, ?)",
+                [gid, sender_id, message, sds]
             );
             const payload = {
                 id: result.insertId,
-                group_id,
+                group_id: gid,
                 sender_id,
                 message,
                 sender_name,
                 sender_avatar,
+                self_destruct_seconds: sds,
                 created_at: new Date().toISOString(),
             };
-            io.to(`group_${group_id}`).emit("receive_group_message", payload);
+            io.to(`group_${gid}`).emit("receive_group_message", payload);
+
+            // Intercept @ai trigger
+            if (message.trim().toLowerCase().startsWith("@ai")) {
+                const aiText = await getAIReply(message);
+                
+                // Fetch Admin details
+                const [adminResult] = await db.query("SELECT id, username, avatar FROM users WHERE username = 'Admin'");
+                const adminId = adminResult[0]?.id || 1;
+                const adminName = "Admin (AI)";
+                const adminAvatar = adminResult[0]?.avatar || "https://api.dicebear.com/7.x/bottts/svg?seed=Admin";
+
+                const [aiResult] = await db.query(
+                    "INSERT INTO group_messages (group_id, sender_id, message, self_destruct_seconds) VALUES (?, ?, ?, ?)",
+                    [gid, adminId, aiText, 0]
+                );
+
+                const aiPayload = {
+                    id: aiResult.insertId,
+                    group_id: gid,
+                    sender_id: adminId,
+                    message: aiText,
+                    sender_name: adminName,
+                    sender_avatar: adminAvatar,
+                    self_destruct_seconds: 0,
+                    created_at: new Date().toISOString(),
+                };
+
+                io.to(`group_${gid}`).emit("receive_group_message", aiPayload);
+            }
         } catch (err) {
+            console.error("[send_group_message] Error:", err.message);
             socket.emit("error", { message: "Failed to send group message" });
         }
     });
@@ -188,6 +342,33 @@ io.on("connection", (socket) => {
     // Join group room
     socket.on("join_group", (groupId) => {
         socket.join(`group_${groupId}`);
+    });
+
+    socket.on("whiteboard_draw", (data) => {
+        const { chat_id, isGroup, sender_id, drawData } = data;
+        if (isGroup) {
+            socket.to(`group_${chat_id}`).emit("whiteboard_draw", { sender_id, drawData });
+        } else {
+            socket.to(`user_${chat_id}`).emit("whiteboard_draw", { sender_id, drawData });
+        }
+    });
+
+    socket.on("whiteboard_clear", (data) => {
+        const { chat_id, isGroup, sender_id } = data;
+        if (isGroup) {
+            socket.to(`group_${chat_id}`).emit("whiteboard_clear", { sender_id });
+        } else {
+            socket.to(`user_${chat_id}`).emit("whiteboard_clear", { sender_id });
+        }
+    });
+
+    socket.on("task_update", (data) => {
+        const { chat_id, isGroup } = data;
+        if (isGroup) {
+            socket.to(`group_${chat_id}`).emit("task_update", data);
+        } else {
+            socket.to(`user_${chat_id}`).emit("task_update", data);
+        }
     });
 
     socket.on("disconnecting", () => {
@@ -1053,14 +1234,157 @@ app.get("/api/contacts/blocked", verifyToken, async (req, res) => {
 });
 
 // File Upload endpoint
-app.post("/api/upload", verifyToken, upload.single("file"), (req, res) => {
+app.post("/api/upload", verifyToken, upload.single("file"), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded." });
+    
+    try {
+        const fileBuffer = fs.readFileSync(req.file.path);
+        await db.saveAttachment(req.file.filename, req.file.mimetype, fileBuffer);
+    } catch (err) {
+        console.error("Error storing upload in DB:", err);
+        return res.status(500).json({ message: "Failed to store file permanently." });
+    }
+
     // Return a full absolute URL so the avatar works in production (not just localhost)
     const baseUrl = process.env.BASE_URL ||
         (process.env.RENDER_EXTERNAL_URL) ||
         `${req.protocol}://${req.get("host")}`;
     const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
     res.json({ url: fileUrl });
+});
+
+
+// POST /api/ai/summarize
+app.post("/api/ai/summarize", verifyToken, async (req, res) => {
+    const { chatId, isGroup } = req.body;
+    if (!chatId) return res.status(400).json({ message: "chatId is required." });
+    
+    try {
+        let messages = [];
+        if (isGroup) {
+            const sql = `
+                SELECT gm.message, u.username AS sender_name
+                FROM group_messages gm JOIN users u ON gm.sender_id = u.id
+                WHERE gm.group_id = ?
+                ORDER BY gm.created_at DESC
+                LIMIT 30
+            `;
+            const [rows] = await db.query(sql, [chatId]);
+            messages = rows.reverse();
+        } else {
+            const sql = `
+                SELECT m.message, u.username AS sender_name
+                FROM messages m JOIN users u ON m.sender_id = u.id
+                WHERE (m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)
+                ORDER BY m.created_at DESC
+                LIMIT 30
+            `;
+            const [rows] = await db.query(sql, [req.user.id, chatId, chatId, req.user.id]);
+            messages = rows.reverse();
+        }
+        
+        if (messages.length === 0) {
+            return res.json({ summary: "No messages to summarize yet." });
+        }
+        
+        const conversationText = messages.map(m => `${m.sender_name}: ${m.message}`).join("\n");
+        let summaryText = "";
+        if (process.env.GEMINI_API_KEY) {
+            try {
+                summaryText = await callGeminiAPI(
+                    `Summarize the following chat conversation history into bullet points (under 5 bullets, keeping it brief and action-oriented):\n\n${conversationText}`,
+                    process.env.GEMINI_API_KEY
+                );
+            } catch (apiErr) {
+                console.error("Gemini API call failed:", apiErr);
+            }
+        }
+        
+        if (!summaryText) {
+            const senders = [...new Set(messages.map(m => m.sender_name))];
+            const wordCount = messages.reduce((acc, m) => acc + m.message.split(" ").length, 0);
+            summaryText = `### Conversation Heuristics (Offline Summary)\n` +
+                          `* **Active Senders:** ${senders.join(", ")}\n` +
+                          `* **Recent Traffic:** ${messages.length} messages (${wordCount} words) summarized.\n` +
+                          `* **Last Few Bullet Points:**\n` +
+                          messages.slice(-3).map(m => `  - *${m.sender_name}*: "${m.message.substring(0, 50)}${m.message.length > 50 ? '...' : ''}"`).join("\n");
+        }
+        res.json({ summary: summaryText });
+    } catch (err) {
+        console.error("Summarizer route error:", err);
+        res.status(500).json({ message: "Failed to summarize chat." });
+    }
+});
+
+// GET /api/tasks/:chatId
+app.get("/api/tasks/:chatId", verifyToken, async (req, res) => {
+    const { chatId } = req.params;
+    try {
+        const tasks = await db.getTasks(chatId);
+        res.json(tasks);
+    } catch (err) {
+        console.error("GET tasks error:", err);
+        res.status(500).json({ message: "Failed to fetch tasks." });
+    }
+});
+
+// POST /api/tasks
+app.post("/api/tasks", verifyToken, async (req, res) => {
+    const { chat_id, title, description, assigned_to, status } = req.body;
+    if (!chat_id || !title) return res.status(400).json({ message: "chat_id and title are required." });
+    try {
+        const task = await db.saveTask({ chat_id, title, description: description || "", assigned_to: assigned_to || null, status: status || "todo" });
+        res.status(201).json(task);
+    } catch (err) {
+        console.error("POST tasks error:", err);
+        res.status(500).json({ message: "Failed to create task." });
+    }
+});
+
+// PUT /api/tasks/:taskId
+app.put("/api/tasks/:taskId", verifyToken, async (req, res) => {
+    const { taskId } = req.params;
+    const updateData = req.body;
+    try {
+        const updated = await db.updateTask(taskId, updateData);
+        if (!updated) return res.status(404).json({ message: "Task not found." });
+        res.json(updated);
+    } catch (err) {
+        console.error("PUT tasks error:", err);
+        res.status(500).json({ message: "Failed to update task." });
+    }
+});
+
+// DELETE /api/tasks/:taskId
+app.delete("/api/tasks/:taskId", verifyToken, async (req, res) => {
+    const { taskId } = req.params;
+    try {
+        await db.deleteTask(taskId);
+        res.json({ success: true });
+    } catch (err) {
+        console.error("DELETE tasks error:", err);
+        res.status(500).json({ message: "Failed to delete task." });
+    }
+});
+
+// DELETE /api/messages/single/:messageId
+app.delete("/api/messages/single/:messageId", verifyToken, async (req, res) => {
+    const { messageId } = req.params;
+    const { isGroup, chatId } = req.query;
+    try {
+        if (isGroup === "true") {
+            await db.query("DELETE FROM group_messages WHERE id = ?", [messageId]);
+            io.to(`group_${chatId}`).emit("message_deleted", { messageId, chatId, isGroup: true });
+        } else {
+            await db.query("DELETE FROM messages WHERE id = ?", [messageId]);
+            io.to(`user_${chatId}`).emit("message_deleted", { messageId, chatId, isGroup: false });
+            io.to(`user_${req.user.id}`).emit("message_deleted", { messageId, chatId, isGroup: false });
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error("DELETE message error:", err);
+        res.status(500).json({ message: "Failed to delete message." });
+    }
 });
 
 
@@ -1252,7 +1576,7 @@ app.delete("/api/messages/:contactId", verifyToken, async (req, res) => {
 
 // HTTP fallback for message saving (socket is primary)
 app.post("/api/messages", verifyToken, validateSendMessage, async (req, res) => {
-    const { receiver_id, message } = req.body;
+    const { receiver_id, message, self_destruct_seconds } = req.body;
     const sender_id = req.user.id;
     const rid = Number(receiver_id);
     const sid = Number(sender_id);
@@ -1273,10 +1597,10 @@ app.post("/api/messages", verifyToken, validateSendMessage, async (req, res) => 
         }
 
         const [result] = await db.query(
-            "INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
-            [sid, rid, message]
+            "INSERT INTO messages (sender_id, receiver_id, message, self_destruct_seconds) VALUES (?, ?, ?, ?)",
+            [sid, rid, message, self_destruct_seconds || 0]
         );
-        res.status(201).json({ id: result.insertId, sender_id: sid, receiver_id: rid, message });
+        res.status(201).json({ id: result.insertId, sender_id: sid, receiver_id: rid, message, self_destruct_seconds: self_destruct_seconds || 0 });
     } catch (err) {
         console.error("[API] POST messages error:", err.message);
         res.status(500).json({ message: err.message });

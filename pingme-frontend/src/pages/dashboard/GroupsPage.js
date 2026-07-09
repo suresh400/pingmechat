@@ -2,14 +2,17 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
     Box, Stack, Typography, Avatar, InputBase, IconButton, Button, Drawer,
     Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-    Chip, CircularProgress, Divider, Snackbar, Alert, Tooltip, useMediaQuery, useTheme
+    Chip, CircularProgress, Divider, Snackbar, Alert, Tooltip, useMediaQuery, useTheme, Menu, MenuItem
 } from "@mui/material";
-import { MagnifyingGlass, Plus, PaperPlaneRight, Smiley, Users, X, Paperclip, Gear, VideoCamera, CaretLeft, Info, Phone } from "phosphor-react";
+import { MagnifyingGlass, Plus, PaperPlaneRight, Smiley, Users, X, Paperclip, Gear, VideoCamera, CaretLeft, Info, Phone, Hourglass, Palette, ListChecks } from "phosphor-react";
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
 import useSettings from "../../hooks/useSettings";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSocket } from "../../contexts/SocketContext";
 import { useNavigate, useOutletContext } from "react-router-dom";
+import SelfDestructCountdown from "../../components/SelfDestructCountdown";
+import WhiteboardDialog from "../../components/WhiteboardDialog";
+import ConvertToTaskDialog from "../../components/ConvertToTaskDialog";
 
 import { API_BASE, BASE_URL } from "../../constants";
 
@@ -17,7 +20,7 @@ const GroupsPage = () => {
     const { currentUser, authFetch } = useAuth();
     const socket = useSocket();
 
-    const { themeMode } = useSettings();
+    const { themeMode, customChatBgColor } = useSettings();
     const isDark = themeMode === "dark";
 
     const getFileUrl = (path) => {
@@ -35,6 +38,11 @@ const GroupsPage = () => {
     const [recordingStream, setRecordingStream] = useState(null);
     const [videoPreview, setVideoPreview] = useState(null);
     const [recordingTime, setRecordingTime] = useState(0);
+    const [timerMenuAnchor, setTimerMenuAnchor] = useState(null);
+    const [selfDestructSeconds, setSelfDestructSeconds] = useState(0);
+    const [whiteboardOpen, setWhiteboardOpen] = useState(false);
+    const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+    const [taskMessageText, setTaskMessageText] = useState("");
 
     // ── Group unread badges: { [groupId]: count } ─────────────────────────────
     const [groupUnread, setGroupUnread] = useState({});
@@ -125,6 +133,16 @@ const GroupsPage = () => {
         return () => socket.off("receive_group_message", handler);
     }, [socket, groups]);
 
+    useEffect(() => {
+        if (!socket) return;
+        const deleteHandler = (data) => {
+            const { messageId } = data;
+            setMessages((prev) => prev.filter((m) => String(m.id) !== String(messageId)));
+        };
+        socket.on("message_deleted", deleteHandler);
+        return () => socket.off("message_deleted", deleteHandler);
+    }, [socket]);
+
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
     const openGroup = async (group) => {
@@ -153,9 +171,11 @@ const GroupsPage = () => {
             message: newMessage.trim(),
             sender_name: currentUser.username,
             sender_avatar: currentUser.avatar,
+            self_destruct_seconds: selfDestructSeconds,
         });
         setNewMessage("");
         setShowEmojiPicker(false);
+        setSelfDestructSeconds(0);
     };
 
     const uploadAndSend = async (file) => {
@@ -172,7 +192,9 @@ const GroupsPage = () => {
                 message: data.url,
                 sender_name: currentUser.username,
                 sender_avatar: currentUser.avatar,
+                self_destruct_seconds: selfDestructSeconds,
             });
+            setSelfDestructSeconds(0);
         } catch (err) {
             setSnackbar({ open: true, message: err.message, severity: "error" });
         }
@@ -478,6 +500,14 @@ const GroupsPage = () => {
                                         <Phone size={22} weight="bold" />
                                     </IconButton>
                                 </Tooltip>
+                                <Tooltip title="Collaborative Whiteboard">
+                                    <IconButton
+                                        onClick={() => setWhiteboardOpen(true)}
+                                        sx={{ color: "text.secondary", "&:hover": { color: "text.primary" } }}
+                                    >
+                                        <Palette size={22} weight="bold" />
+                                    </IconButton>
+                                </Tooltip>
                                 <Tooltip title="Group Video Call">
                                     <IconButton
                                         onClick={() => startGroupCall("video")}
@@ -496,10 +526,12 @@ const GroupsPage = () => {
                         <Stack direction="row" sx={{ flexGrow: 1, overflow: "hidden" }}>
                             <Box sx={{
                                 flexGrow: 1, height: "100%", overflowY: "auto", p: 3, display: "flex", flexDirection: "column", gap: 1.5,
-                                bgcolor: isDark ? "#0b141a" : "#e5ddd5",
-                                backgroundImage: isDark
-                                  ? "linear-gradient(rgba(11, 20, 26, 0.93), rgba(11, 20, 26, 0.93)), url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')"
-                                  : "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')",
+                                bgcolor: customChatBgColor || (isDark ? "#0b141a" : "#e5ddd5"),
+                                backgroundImage: customChatBgColor
+                                  ? "none"
+                                  : (isDark
+                                      ? "linear-gradient(rgba(11, 20, 26, 0.93), rgba(11, 20, 26, 0.93)), url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')"
+                                      : "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')"),
                                 backgroundRepeat: "repeat",
                             }}>
                                 {messages.map((msg) => {
@@ -558,7 +590,31 @@ const GroupsPage = () => {
                                                         );
                                                     })()}
                                                 </Box>
-                                                <Typography variant="caption" color="text.secondary" sx={{ display: "block", textAlign: isOwn ? "right" : "left", mt: 0.3, px: 0.5 }}>{formatTime(msg.created_at)}</Typography>
+                                                <Stack direction="row" spacing={0.5} alignItems="center" justifyContent={isOwn ? "flex-end" : "flex-start"} sx={{ mt: 0.3, px: 0.5 }}>
+                                                    <Typography variant="caption" color="text.secondary">{formatTime(msg.created_at)}</Typography>
+                                                    {msg.self_destruct_seconds > 0 && (
+                                                        <SelfDestructCountdown
+                                                            messageId={msg.id}
+                                                            seconds={msg.self_destruct_seconds}
+                                                            isGroup={true}
+                                                            chatId={activeGroup.id}
+                                                            authFetch={authFetch}
+                                                            onDeleteLocal={(id) => setMessages((prev) => prev.filter((m) => String(m.id) !== String(id)))}
+                                                        />
+                                                    )}
+                                                    <Tooltip title="Convert to Task">
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => {
+                                                                setTaskMessageText(msg.message);
+                                                                setTaskDialogOpen(true);
+                                                            }}
+                                                            sx={{ p: 0, color: "text.disabled", "&:hover": { color: "primary.main" } }}
+                                                        >
+                                                            <ListChecks size={13} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                </Stack>
                                             </Box>
                                             {isOwn && <Avatar src={currentUser?.avatar} sx={{ width: 28, height: 28 }} />}
                                         </Box>
@@ -633,6 +689,29 @@ const GroupsPage = () => {
                                             }} />
                                         )}
                                     </IconButton>
+
+                                    <IconButton size="small" onClick={(e) => setTimerMenuAnchor(e.currentTarget)} sx={{ color: selfDestructSeconds > 0 ? "error.main" : "text.secondary" }}>
+                                        <Hourglass size={22} weight={selfDestructSeconds > 0 ? "fill" : "bold"} />
+                                        {selfDestructSeconds > 0 && (
+                                            <Typography variant="caption" sx={{ ml: 0.5, fontWeight: "bold", fontSize: 10 }}>
+                                                {selfDestructSeconds}s
+                                            </Typography>
+                                        )}
+                                    </IconButton>
+
+                                    <Menu
+                                        anchorEl={timerMenuAnchor}
+                                        open={Boolean(timerMenuAnchor)}
+                                        onClose={() => setTimerMenuAnchor(null)}
+                                        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                                        transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                                    >
+                                        <MenuItem onClick={() => { setSelfDestructSeconds(0); setTimerMenuAnchor(null); }}>Off</MenuItem>
+                                        <MenuItem onClick={() => { setSelfDestructSeconds(5); setTimerMenuAnchor(null); }}>5s</MenuItem>
+                                        <MenuItem onClick={() => { setSelfDestructSeconds(10); setTimerMenuAnchor(null); }}>10s</MenuItem>
+                                        <MenuItem onClick={() => { setSelfDestructSeconds(30); setTimerMenuAnchor(null); }}>30s</MenuItem>
+                                        <MenuItem onClick={() => { setSelfDestructSeconds(60); setTimerMenuAnchor(null); }}>60s</MenuItem>
+                                    </Menu>
                                 </Box>
                                 <IconButton onClick={handleSend} disabled={!newMessage.trim()} sx={{ bgcolor: "text.primary", color: "background.paper", width: 44, height: 44, "&:hover": { bgcolor: "text.primary", opacity: 0.9 }, "&.Mui-disabled": { bgcolor: "action.disabledBackground" } }}>
                                     <PaperPlaneRight size={22} weight="fill" />
@@ -817,6 +896,31 @@ const GroupsPage = () => {
             <Snackbar open={snackbar.open} autoHideDuration={3000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
                 <Alert severity={snackbar.severity} variant="filled" onClose={() => setSnackbar({ ...snackbar, open: false })}>{snackbar.message}</Alert>
             </Snackbar>
+
+            {whiteboardOpen && (
+                <WhiteboardDialog
+                    open={whiteboardOpen}
+                    onClose={() => setWhiteboardOpen(false)}
+                    socket={socket}
+                    chatId={activeGroup.id}
+                    isGroup={true}
+                    currentUser={currentUser}
+                    authFetch={authFetch}
+                    onSendImage={uploadAndSend}
+                />
+            )}
+
+            {taskDialogOpen && (
+                <ConvertToTaskDialog
+                    open={taskDialogOpen}
+                    onClose={() => setTaskDialogOpen(false)}
+                    messageText={taskMessageText}
+                    currentUser={currentUser}
+                    authFetch={authFetch}
+                    socket={socket}
+                    onComplete={() => setSnackbar({ open: true, message: "Added to Kanban Board!", severity: "success" })}
+                />
+            )}
         </Stack>
     );
 };

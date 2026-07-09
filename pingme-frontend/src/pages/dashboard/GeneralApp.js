@@ -8,13 +8,16 @@ import {
   MagnifyingGlass, Phone, VideoCamera, Info, PaperPlaneRight, CaretLeft,
   Paperclip, Smiley, Prohibit, Trash, SignOut, X, Gear,
   PhoneIncoming, PhoneOutgoing, DotsThreeVertical, DownloadSimple, FileText, Check, Checks,
-  EnvelopeSimple, User,
+  EnvelopeSimple, User, Hourglass, Palette, ListChecks,
 } from "phosphor-react";
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
 import useSettings from "../../hooks/useSettings";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSocket } from "../../contexts/SocketContext";
 import { useNavigate, useOutletContext } from "react-router-dom";
+import SelfDestructCountdown from "../../components/SelfDestructCountdown";
+import WhiteboardDialog from "../../components/WhiteboardDialog";
+import ConvertToTaskDialog from "../../components/ConvertToTaskDialog";
 
 import { API_BASE, BASE_URL } from "../../constants";
 
@@ -223,7 +226,7 @@ const GeneralApp = () => {
   const socket = useSocket();
   const navigate = useNavigate();
 
-  const { themeMode } = useSettings();
+  const { themeMode, customChatBgColor } = useSettings();
   const theme = useTheme();
   const isDark = themeMode === "dark";
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -239,6 +242,11 @@ const GeneralApp = () => {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [timerMenuAnchor, setTimerMenuAnchor] = useState(null);
+  const [selfDestructSeconds, setSelfDestructSeconds] = useState(0);
+  const [whiteboardOpen, setWhiteboardOpen] = useState(false);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [taskMessageText, setTaskMessageText] = useState("");
 
   const messagesEndRef = useRef(null);
   const [blockedUsers, setBlockedUsers] = useState(new Set());
@@ -418,8 +426,14 @@ const GeneralApp = () => {
       setMessages((prev) => prev.map(m => m.id === data.messageId ? { ...m, is_read: 1 } : m));
     };
 
+    const deleteHandler = (data) => {
+      const { messageId } = data;
+      setMessages((prev) => prev.filter((m) => String(m.id) !== String(messageId)));
+    };
+
     socket.on("receive_message", handler);
     socket.on("message_read", readHandler);
+    socket.on("message_deleted", deleteHandler);
 
     socket.on("user_status_update", (data) => {
       const { userId, is_online, last_seen } = data;
@@ -452,6 +466,7 @@ const GeneralApp = () => {
     return () => {
       socket.off("receive_message", handler);
       socket.off("message_read", readHandler);
+      socket.off("message_deleted", deleteHandler);
       socket.off("user_status_update");
       socket.off("message_blocked");
     };
@@ -515,9 +530,11 @@ const GeneralApp = () => {
       message: newMessage.trim(),
       sender_name: currentUser.username,
       sender_avatar: currentUser.avatar,
+      self_destruct_seconds: selfDestructSeconds,
     });
     setNewMessage("");
     setShowEmojiPicker(false);
+    setSelfDestructSeconds(0);
     fetchActiveConversations(); // Ensure contact is in sidebar
   };
 
@@ -536,7 +553,9 @@ const GeneralApp = () => {
         message: data.url,
         sender_name: currentUser.username,
         sender_avatar: currentUser.avatar,
+        self_destruct_seconds: selfDestructSeconds,
       });
+      setSelfDestructSeconds(0);
       fetchActiveConversations();
     } catch (err) {
       setSnackbar({ open: true, message: err.message, severity: "error" });
@@ -807,6 +826,14 @@ const GeneralApp = () => {
                     <VideoCamera size={22} weight="bold" />
                   </IconButton>
                 </Tooltip>
+                <Tooltip title="Collaborative Whiteboard">
+                  <IconButton
+                    onClick={() => setWhiteboardOpen(true)}
+                    sx={{ color: "text.secondary", "&:hover": { color: "text.primary" } }}
+                  >
+                    <Palette size={22} weight="bold" />
+                  </IconButton>
+                </Tooltip>
                 <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
                 <IconButton onClick={handleOpenMenu} sx={{ color: "text.secondary" }}>
                   <DotsThreeVertical size={22} weight="bold" />
@@ -846,10 +873,12 @@ const GeneralApp = () => {
                 display: "flex",
                 flexDirection: "column",
                 gap: 1.5,
-                bgcolor: isDark ? "#0b141a" : "#e5ddd5",
-                backgroundImage: isDark
-                  ? "linear-gradient(rgba(11, 20, 26, 0.93), rgba(11, 20, 26, 0.93)), url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')"
-                  : "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')",
+                bgcolor: customChatBgColor || (isDark ? "#0b141a" : "#e5ddd5"),
+                backgroundImage: customChatBgColor
+                  ? "none"
+                  : (isDark
+                      ? "linear-gradient(rgba(11, 20, 26, 0.93), rgba(11, 20, 26, 0.93)), url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')"
+                      : "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')"),
                 backgroundRepeat: "repeat",
                 position: "relative"
               }}>
@@ -1010,6 +1039,30 @@ const GeneralApp = () => {
                               </Box>
                               <Stack direction="row" spacing={0.5} alignItems="center" justifyContent={isOwn ? "flex-end" : "flex-start"} sx={{ mt: 0.3, px: 0.5 }}>
                                 <Typography variant="caption" color="text.secondary">{formatTime(msg.created_at)}</Typography>
+                                {msg.self_destruct_seconds > 0 && (
+                                  <SelfDestructCountdown
+                                    messageId={msg.id}
+                                    seconds={msg.self_destruct_seconds}
+                                    isGroup={false}
+                                    chatId={activeContact.id}
+                                    authFetch={authFetch}
+                                    onDeleteLocal={(id) => setMessages((prev) => prev.filter((m) => String(m.id) !== String(id)))}
+                                  />
+                                )}
+                                {!msg._isCallEvent && (
+                                  <Tooltip title="Convert to Task">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => {
+                                        setTaskMessageText(msg.message);
+                                        setTaskDialogOpen(true);
+                                      }}
+                                      sx={{ p: 0, color: "text.disabled", "&:hover": { color: "primary.main" } }}
+                                    >
+                                      <ListChecks size={13} />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
                                 {isOwn && !msg._isCallEvent && (
                                   Number(msg.is_read) === 1 ? (
                                     <Checks size={14} weight="bold" color="#2196F3" />
@@ -1297,6 +1350,29 @@ const GeneralApp = () => {
                     <Smiley size={22} weight="bold" />
                   </IconButton>
 
+                  <IconButton size="small" onClick={(e) => setTimerMenuAnchor(e.currentTarget)} sx={{ color: selfDestructSeconds > 0 ? "error.main" : "text.secondary" }}>
+                    <Hourglass size={22} weight={selfDestructSeconds > 0 ? "fill" : "bold"} />
+                    {selfDestructSeconds > 0 && (
+                      <Typography variant="caption" sx={{ ml: 0.5, fontWeight: "bold", fontSize: 10 }}>
+                        {selfDestructSeconds}s
+                      </Typography>
+                    )}
+                  </IconButton>
+                  
+                  <Menu
+                    anchorEl={timerMenuAnchor}
+                    open={Boolean(timerMenuAnchor)}
+                    onClose={() => setTimerMenuAnchor(null)}
+                    anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                    transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                  >
+                    <MenuItem onClick={() => { setSelfDestructSeconds(0); setTimerMenuAnchor(null); }}>Off</MenuItem>
+                    <MenuItem onClick={() => { setSelfDestructSeconds(5); setTimerMenuAnchor(null); }}>5s</MenuItem>
+                    <MenuItem onClick={() => { setSelfDestructSeconds(10); setTimerMenuAnchor(null); }}>10s</MenuItem>
+                    <MenuItem onClick={() => { setSelfDestructSeconds(30); setTimerMenuAnchor(null); }}>30s</MenuItem>
+                    <MenuItem onClick={() => { setSelfDestructSeconds(60); setTimerMenuAnchor(null); }}>60s</MenuItem>
+                  </Menu>
+
                 </Box>
 
                 <IconButton
@@ -1316,6 +1392,31 @@ const GeneralApp = () => {
             <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
               <Alert severity={snackbar.severity} variant="filled" onClose={() => setSnackbar({ ...snackbar, open: false })}>{snackbar.message}</Alert>
             </Snackbar>
+
+            {whiteboardOpen && (
+              <WhiteboardDialog
+                open={whiteboardOpen}
+                onClose={() => setWhiteboardOpen(false)}
+                socket={socket}
+                chatId={activeContact.id}
+                isGroup={false}
+                currentUser={currentUser}
+                authFetch={authFetch}
+                onSendImage={uploadAndSend}
+              />
+            )}
+
+            {taskDialogOpen && (
+              <ConvertToTaskDialog
+                open={taskDialogOpen}
+                onClose={() => setTaskDialogOpen(false)}
+                messageText={taskMessageText}
+                currentUser={currentUser}
+                authFetch={authFetch}
+                socket={socket}
+                onComplete={() => setSnackbar({ open: true, message: "Added to Kanban Board!", severity: "success" })}
+              />
+            )}
           </Stack>
         ) : (
           !isMobile && (

@@ -24,6 +24,8 @@ import SettingDirection from "./SettingDirection";
 import SettingFullscreen from "./SettingFullscreen";
 import SettingColorPresets from "./SettingColorPresets";
 
+import SettingCustomTheme from "./SettingCustomTheme";
+
 // ----------------------------------------------------------------------
 
 const RootStyle = styled(m.div)(({ theme }) => ({
@@ -61,6 +63,9 @@ export default function SettingsDrawer() {
     themeContrast,
     themeDirection,
     themeColorPresets,
+    customPrimaryColor,
+    customChatBgColor,
+    customCss,
     onResetSetting,
   } = useSettings();
 
@@ -72,7 +77,10 @@ export default function SettingsDrawer() {
     themeStretch !== defaultSettings.themeStretch ||
     themeContrast !== defaultSettings.themeContrast ||
     themeDirection !== defaultSettings.themeDirection ||
-    themeColorPresets !== defaultSettings.themeColorPresets;
+    themeColorPresets !== defaultSettings.themeColorPresets ||
+    customPrimaryColor !== "" ||
+    customChatBgColor !== "" ||
+    customCss !== "";
 
   useEffect(() => {
     if (open) {
@@ -145,6 +153,12 @@ export default function SettingsDrawer() {
                     <Typography variant="subtitle2">Presets</Typography>
                     <SettingColorPresets />
                   </Stack>
+
+                  <Divider sx={{ borderStyle: "dashed" }} />
+                  
+                  <SettingCustomTheme />
+
+                  <Divider sx={{ borderStyle: "dashed" }} />
 
                   <SettingFullscreen />
                 </Stack>

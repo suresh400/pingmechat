@@ -1,5 +1,5 @@
 import PropTypes from "prop-types";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 // @mui
 import { CssBaseline } from "@mui/material";
 import {
@@ -23,21 +23,47 @@ ThemeProvider.propTypes = {
 };
 
 export default function ThemeProvider({ children }) {
-  const { themeMode, themeDirection } = useSettings();
+  const { themeMode, themeDirection, customPrimaryColor, customCss } = useSettings();
 
   const isLight = themeMode === "light";
 
+  // Dynamic CSS injection
+  useEffect(() => {
+    let styleTag = document.getElementById("custom-theme-css");
+    if (!styleTag) {
+      styleTag = document.createElement("style");
+      styleTag.id = "custom-theme-css";
+      document.head.appendChild(styleTag);
+    }
+    styleTag.innerHTML = customCss || "";
+  }, [customCss]);
+
   const themeOptions = useMemo(
-    () => ({
-      palette: isLight ? palette.light : palette.dark,
-      typography,
-      breakpoints,
-      shape: { borderRadius: 8 },
-      direction: themeDirection,
-      shadows: isLight ? shadows.light : shadows.dark,
-      customShadows: isLight ? customShadows.light : customShadows.dark,
-    }),
-    [isLight, themeDirection]
+    () => {
+      const basePalette = isLight ? palette.light : palette.dark;
+      const finalPalette = {
+        ...basePalette,
+        primary: customPrimaryColor ? {
+          lighter: customPrimaryColor,
+          light: customPrimaryColor,
+          main: customPrimaryColor,
+          dark: customPrimaryColor,
+          darker: customPrimaryColor,
+          contrastText: '#fff'
+        } : basePalette.primary
+      };
+
+      return {
+        palette: finalPalette,
+        typography,
+        breakpoints,
+        shape: { borderRadius: 8 },
+        direction: themeDirection,
+        shadows: isLight ? shadows.light : shadows.dark,
+        customShadows: isLight ? customShadows.light : customShadows.dark,
+      };
+    },
+    [isLight, themeDirection, customPrimaryColor]
   );
 
   const theme = createTheme(themeOptions);

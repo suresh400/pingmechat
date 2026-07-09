@@ -58,6 +58,7 @@ const MessageSchema = new mongoose.Schema({
   receiver_id: { type: Number },
   message: { type: String },
   is_read: { type: Boolean, default: false },
+  self_destruct_seconds: { type: Number, default: 0 },
   created_at: { type: Date, default: Date.now }
 });
 const Message = mongoose.model("Message", MessageSchema);
@@ -84,6 +85,7 @@ const GroupMessageSchema = new mongoose.Schema({
   group_id: { type: Number },
   sender_id: { type: Number },
   message: { type: String },
+  self_destruct_seconds: { type: Number, default: 0 },
   created_at: { type: Date, default: Date.now }
 });
 const GroupMessage = mongoose.model("GroupMessage", GroupMessageSchema);
@@ -138,6 +140,26 @@ const FeedbackSchema = new mongoose.Schema({
   submitted_at: { type: Date, default: Date.now }
 });
 const Feedback = mongoose.model("Feedback", FeedbackSchema);
+
+const AttachmentSchema = new mongoose.Schema({
+  id: { type: Number, unique: true },
+  filename: { type: String, unique: true },
+  mime_type: { type: String },
+  data: { type: Buffer },
+  created_at: { type: Date, default: Date.now }
+});
+const Attachment = mongoose.model("Attachment", AttachmentSchema);
+
+const TaskSchema = new mongoose.Schema({
+  id: { type: Number, unique: true },
+  chat_id: { type: String }, // Can be group_id or private contact_id string
+  title: { type: String },
+  description: { type: String },
+  status: { type: String, enum: ["todo", "in_progress", "done"], default: "todo" },
+  assigned_to: { type: Number, default: null }, // User ID
+  created_at: { type: Date, default: Date.now }
+});
+const Task = mongoose.model("Task", TaskSchema);
 
 // ── Migration / Seed from db.json ──────────────────────────────────────────
 
@@ -565,6 +587,7 @@ async function handleInsert(sl, p) {
       receiver_id: Number(p[1]),
       message: p[2],
       is_read: false,
+      self_destruct_seconds: p[3] !== undefined ? Number(p[3]) : 0,
       created_at: new Date()
     });
     await message.save();
@@ -578,6 +601,7 @@ async function handleInsert(sl, p) {
       group_id: Number(p[0]),
       sender_id: Number(p[1]),
       message: p[2],
+      self_destruct_seconds: p[3] !== undefined ? Number(p[3]) : 0,
       created_at: new Date()
     });
     await msg.save();
@@ -814,6 +838,69 @@ const db = {
     if (sl.startsWith("update")) return await handleUpdate(sl, params);
     if (sl.startsWith("delete")) return await handleDelete(sl, params);
     throw new Error(`[DB] Unsupported: ${sl.substring(0, 80)}`);
+  },
+  saveAttachment: async (filename, mimeType, buffer) => {
+    try {
+      const id = await nextId("attachments");
+      await Attachment.updateOne(
+        { filename },
+        { id, filename, mime_type: mimeType, data: buffer },
+        { upsert: true }
+      );
+      console.log(`[DB] Attachment ${filename} saved to MongoDB successfully.`);
+    } catch (err) {
+      console.error("[DB] Error saving attachment to MongoDB:", err);
+      throw err;
+    }
+  },
+  getAttachment: async (filename) => {
+    try {
+      return await Attachment.findOne({ filename }).lean();
+    } catch (err) {
+      console.error("[DB] Error fetching attachment from MongoDB:", err);
+      return null;
+    }
+  },
+  getTasks: async (chatId) => {
+    try {
+      return await Task.find({ chat_id: String(chatId) }).sort({ created_at: 1 }).lean();
+    } catch (err) {
+      console.error("[DB] Error fetching tasks:", err);
+      return [];
+    }
+  },
+  saveTask: async (taskData) => {
+    try {
+      const id = await nextId("tasks");
+      const task = new Task({ id, ...taskData });
+      await task.save();
+      return task.toObject();
+    } catch (err) {
+      console.error("[DB] Error saving task:", err);
+      throw err;
+    }
+  },
+  updateTask: async (taskId, updateData) => {
+    try {
+      const res = await Task.findOneAndUpdate(
+        { id: Number(taskId) },
+        { $set: updateData },
+        { new: true }
+      ).lean();
+      return res;
+    } catch (err) {
+      console.error("[DB] Error updating task:", err);
+      throw err;
+    }
+  },
+  deleteTask: async (taskId) => {
+    try {
+      await Task.deleteOne({ id: Number(taskId) });
+      return true;
+    } catch (err) {
+      console.error("[DB] Error deleting task:", err);
+      throw err;
+    }
   }
 };
 
