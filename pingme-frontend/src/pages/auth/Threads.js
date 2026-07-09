@@ -123,6 +123,7 @@ void main() {
 const Threads = ({ color = [1, 1, 1], amplitude = 1, distance = 0, enableMouseInteraction = false, ...rest }) => {
   const containerRef = useRef(null);
   const animationFrameId = useRef();
+  const colorKey = JSON.stringify(color);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -136,6 +137,7 @@ const Threads = ({ color = [1, 1, 1], amplitude = 1, distance = 0, enableMouseIn
     container.appendChild(gl.canvas);
 
     const geometry = new Triangle(gl);
+    const parsedColor = JSON.parse(colorKey);
     const program = new Program(gl, {
       vertex: vertexShader,
       fragment: fragmentShader,
@@ -144,7 +146,7 @@ const Threads = ({ color = [1, 1, 1], amplitude = 1, distance = 0, enableMouseIn
         iResolution: {
           value: new Color(gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height)
         },
-        uColor: { value: new Color(...color) },
+        uColor: { value: new Color(...parsedColor) },
         uAmplitude: { value: amplitude },
         uDistance: { value: distance },
         uMouse: { value: new Float32Array([0.5, 0.5]) }
@@ -209,7 +211,7 @@ const Threads = ({ color = [1, 1, 1], amplitude = 1, distance = 0, enableMouseIn
       if (container.contains(gl.canvas)) container.removeChild(gl.canvas);
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
-  }, [color, amplitude, distance, enableMouseInteraction]);
+  }, [colorKey, amplitude, distance, enableMouseInteraction]);
 
   return <div ref={containerRef} className="threads-container" {...rest} />;
 };

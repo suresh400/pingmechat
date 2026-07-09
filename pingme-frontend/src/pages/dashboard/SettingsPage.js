@@ -14,7 +14,7 @@ import { API_BASE } from "../../constants";
 import { useEffect } from "react";
 
 const SettingsPage = () => {
-    const { currentUser, authFetch, logout } = useAuth();
+    const { currentUser, authFetch, logout, updateCurrentUser } = useAuth();
     const { themeMode, onToggleMode } = useSettings();
     const isDark = themeMode === "dark";
     const theme = useTheme();
@@ -35,6 +35,7 @@ const SettingsPage = () => {
     const [showNewPw, setShowNewPw] = useState(false);
     const [showConfirmPw, setShowConfirmPw] = useState(false);
     const [changingPassword, setChangingPassword] = useState(false);
+    const [showEmail, setShowEmail] = useState(true); // privacy toggle
 
     const handleChangePassword = async () => {
         if (passwords.new.length < 8) {
@@ -73,27 +74,31 @@ const SettingsPage = () => {
                 bio: currentUser.bio || "",
                 avatar: currentUser.avatar || ""
             });
+            if (currentUser.show_email !== undefined) {
+                setShowEmail(currentUser.show_email !== false);
+            }
         }
     }, [currentUser]);
 
-    const handleProfileSave = async () => {
+    const handleProfileSave = async (overrideAvatar) => {
         setSaving(true);
+        const avatarToSave = overrideAvatar !== undefined ? overrideAvatar : profile.avatar;
         try {
             const res = await authFetch(`${API_BASE}/auth/profile`, {
                 method: "PUT",
                 body: JSON.stringify({
                     username: profile.username,
                     bio: profile.bio,
-                    avatar: profile.avatar
+                    avatar: avatarToSave
                 }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.message);
             setSnackbar({ open: true, message: "Profile updated successfully! ✓", severity: "success" });
 
-            // Sync with local storage for useAuth
-            const savedUser = JSON.parse(localStorage.getItem("chatapp_user") || "{}");
-            localStorage.setItem("chatapp_user", JSON.stringify({ ...savedUser, ...data.user }));
+            // Sync React state AND localStorage atomically so changes show everywhere without refresh
+            updateCurrentUser(data.user);
+            setProfile(prev => ({ ...prev, ...data.user }));
         } catch (err) {
             setSnackbar({ open: true, message: err.message, severity: "error" });
         } finally {
@@ -122,8 +127,13 @@ const SettingsPage = () => {
 
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || "Upload failed");
-            setProfile(prev => ({ ...prev, avatar: data.url }));
-            setSnackbar({ open: true, message: "Photo uploaded! Save to apply.", severity: "success" });
+
+            // Update local profile state with new avatar URL
+            const newAvatarUrl = data.url;
+            setProfile(prev => ({ ...prev, avatar: newAvatarUrl }));
+
+            // Auto-save profile with new avatar so it persists immediately
+            await handleProfileSave(newAvatarUrl);
         } catch (err) {
             setSnackbar({ open: true, message: err.message, severity: "error" });
         } finally {
@@ -227,7 +237,7 @@ const SettingsPage = () => {
                                     fullWidth
                                     variant="contained"
                                     disabled={saving}
-                                    onClick={handleProfileSave}
+                                    onClick={() => handleProfileSave()}
                                     sx={{
                                         mt: 2, bgcolor: monochromaticStyles.primary, color: isDark ? "#000" : "#fff",
                                         borderRadius: 2, py: 1.5, fontWeight: 800, textTransform: "none",
@@ -265,22 +275,34 @@ const SettingsPage = () => {
                                 </Box>
                             </Paper>
 
-                            {/* Notifications Section */}
+                            {/* Preferences Section */}
                             <Paper elevation={0} sx={{ p: 4, borderRadius: 4, border: "1px solid", borderColor: monochromaticStyles.border, bgcolor: monochromaticStyles.paper }}>
                                 <Typography variant="subtitle1" fontWeight={800} mb={3} sx={{ color: monochromaticStyles.primary, display: "flex", alignItems: "center", gap: 1 }}>
                                     <Bell size={20} weight="bold" /> Preferences
                                 </Typography>
                                 <Stack spacing={1}>
-                                    {[
-                                        { label: "Direct Notifications", default: true },
-                                        { label: "Group Mentions", default: true },
-                                        { label: "Public Searchable", default: true },
-                                    ].map((pref) => (
-                                        <Box key={pref.label} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", py: 1 }}>
-                                            <Typography variant="body2" sx={{ color: monochromaticStyles.secondary }}>{pref.label}</Typography>
-                                            <Switch size="small" defaultChecked={pref.default} sx={{ "& .MuiSwitch-switchBase.Mui-checked": { color: monochromaticStyles.primary }, "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: monochromaticStyles.primary } }} />
+                                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", py: 1 }}>
+                                        <Box>
+                                            <Typography variant="body2" fontWeight={600} sx={{ color: monochromaticStyles.primary }}>Show Email to Others</Typography>
+                                            <Typography variant="caption" sx={{ color: monochromaticStyles.secondary }}>Let contacts see your email in your profile</Typography>
                                         </Box>
-                                    ))}
+                                        <Switch
+                                            size="small"
+                                            checked={showEmail}
+                                            onChange={async (e) => {
+                                                const val = e.target.checked;
+                                                setShowEmail(val);
+                                                try {
+                                                    await authFetch(`${API_BASE}/auth/show-email`, {
+                                                        method: "PUT",
+                                                        body: JSON.stringify({ show_email: val }),
+                                                    });
+                                                    updateCurrentUser({ show_email: val });
+                                                } catch { setShowEmail(!val); } // revert on error
+                                            }}
+                                            sx={{ "& .MuiSwitch-switchBase.Mui-checked": { color: monochromaticStyles.primary }, "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { bgcolor: monochromaticStyles.primary } }}
+                                        />
+                                    </Box>
                                 </Stack>
                             </Paper>
 

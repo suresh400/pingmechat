@@ -7,6 +7,7 @@ import { Eye, EyeSlash, ChatCircleDots } from "phosphor-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import Threads from "./Threads";
+import { API_BASE } from "../../constants";
 
 const LoginPage = () => {
     const navigate = useNavigate();
@@ -16,6 +17,24 @@ const LoginPage = () => {
     const [showPw, setShowPw] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [userCount, setUserCount] = useState(null);
+
+    React.useEffect(() => {
+        const fetchUserCount = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/auth/users-count`);
+                const data = await res.json();
+                if (data && typeof data.total === "number") {
+                    setUserCount(data.total);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        };
+        fetchUserCount();
+        const interval = setInterval(fetchUserCount, 5000); // check every 5s
+        return () => clearInterval(interval);
+    }, []);
 
     const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -189,6 +208,48 @@ const LoginPage = () => {
                         Register
                     </Link>
                 </Typography>
+
+                {/* Active users display */}
+                {userCount !== null && (
+                    <Box sx={{ mt: 3, display: "flex", justifyContent: "center" }}>
+                        <Box sx={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 1.2,
+                            bgcolor: "rgba(255, 255, 255, 0.05)",
+                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            borderRadius: "20px",
+                            px: 2,
+                            py: 0.6,
+                        }}>
+                            <Box sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                bgcolor: "#4CAF50",
+                                boxShadow: "0 0 0 0 rgba(76, 175, 80, 0.7)",
+                                animation: "pulse 1.8s infinite",
+                                "@keyframes pulse": {
+                                    "0%": {
+                                        transform: "scale(0.95)",
+                                        boxShadow: "0 0 0 0 rgba(76, 175, 80, 0.7)",
+                                    },
+                                    "70%": {
+                                        transform: "scale(1)",
+                                        boxShadow: "0 0 0 6px rgba(76, 175, 80, 0)",
+                                    },
+                                    "100%": {
+                                        transform: "scale(0.95)",
+                                        boxShadow: "0 0 0 0 rgba(76, 175, 80, 0)",
+                                    }
+                                }
+                            }} />
+                            <Typography variant="caption" sx={{ color: "rgba(255, 255, 255, 0.7)", fontWeight: 600, fontSize: 11, letterSpacing: 0.3 }}>
+                                Registered Members: <span style={{ color: "#fff", fontWeight: 800 }}>{userCount}</span>
+                            </Typography>
+                        </Box>
+                    </Box>
+                )}
             </Box>
         </Box>
     );

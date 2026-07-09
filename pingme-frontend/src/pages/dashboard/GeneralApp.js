@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box, Stack, Avatar, Typography, InputBase, IconButton,
-  Divider, Tooltip, Chip, CircularProgress, Snackbar, Alert, Menu, MenuItem, useMediaQuery, useTheme
+  Divider, Tooltip, Chip, CircularProgress, Snackbar, Alert, Menu, MenuItem,
+  useMediaQuery, useTheme, Dialog, DialogContent
 } from "@mui/material";
 import {
   MagnifyingGlass, Phone, VideoCamera, Info, PaperPlaneRight, CaretLeft,
   Paperclip, Smiley, Prohibit, Trash, SignOut, X, Gear,
   PhoneIncoming, PhoneOutgoing, DotsThreeVertical, DownloadSimple, FileText, Check, Checks,
+  EnvelopeSimple, User,
 } from "phosphor-react";
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
 import useSettings from "../../hooks/useSettings";
@@ -43,7 +45,14 @@ const GeneralApp = () => {
   const [showContactInfo, setShowContactInfo] = useState(false);
 
   // Conversations Persistence
-  const [activeConversations, setActiveConversations] = useState([]);
+  const [activeConversations, setActiveConversations] = useState(() => {
+    try {
+      const cached = localStorage.getItem("pingme_cached_conversations");
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [conversationsLoading, setConversationsLoading] = useState(false);
 
   // ── Get global call state from DashboardLayout via Outlet context ──────────
@@ -52,19 +61,24 @@ const GeneralApp = () => {
 
   const [mediaStream, setMediaStream] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+  const [contactProfile, setContactProfile] = useState(null); // full profile from API
+  const [avatarOpen, setAvatarOpen] = useState(false);       // lightbox state
 
   const fileInputRef = useRef(null);
 
   const fetchActiveConversations = useCallback(async () => {
-    setConversationsLoading(true);
+    const hasCached = !!localStorage.getItem("pingme_cached_conversations");
+    if (!hasCached) {
+      setConversationsLoading(true);
+    }
     try {
       const res = await authFetch(`${API_BASE}/contacts/active`);
       const data = await res.json();
-      console.log("[fetchActiveConversations] Data:", data);
-      setActiveConversations(Array.isArray(data) ? data : []);
+      const conversations = Array.isArray(data) ? data : [];
+      setActiveConversations(conversations);
+      localStorage.setItem("pingme_cached_conversations", JSON.stringify(conversations));
     } catch (err) {
       console.error("[fetchActiveConversations] Error:", err);
-      setActiveConversations([]);
     }
     finally { setConversationsLoading(false); }
   }, [authFetch]);
@@ -84,6 +98,19 @@ const GeneralApp = () => {
   }, [authFetch]);
 
   useEffect(() => { fetchBlockedUsers(); }, [fetchBlockedUsers]);
+
+  // Fetch full contact profile when info panel opens
+  useEffect(() => {
+    if (showContactInfo && activeContact?.id) {
+      setContactProfile(null); // reset while loading
+      authFetch(`${API_BASE}/users/${activeContact.id}/profile`)
+        .then(r => r.json())
+        .then(data => setContactProfile(data))
+        .catch(() => setContactProfile(null));
+    } else if (!showContactInfo) {
+      setContactProfile(null);
+    }
+  }, [showContactInfo, activeContact?.id, authFetch]);
 
   // Browser Notifications
   useEffect(() => {
@@ -114,18 +141,52 @@ const GeneralApp = () => {
 
   // ── Fetch message history ───────────────────────────────────────────────────
   const fetchMessages = useCallback(async (contactId) => {
-    setMessagesLoading(true);
+    const hasCached = !!localStorage.getItem(`pingme_cached_msgs_${contactId}`);
+    if (!hasCached) {
+      setMessagesLoading(true);
+    }
     try {
       const res = await authFetch(`${API_BASE}/messages/${contactId}`);
       const data = await res.json();
-      setMessages(Array.isArray(data) ? data : []);
+      const msgs = Array.isArray(data) ? data : [];
+      setMessages(msgs);
+      localStorage.setItem(`pingme_cached_msgs_${contactId}`, JSON.stringify(msgs));
       fetchActiveConversations();
       if (fetchTotalUnread) fetchTotalUnread();
-    } catch { setMessages([]); }
+    } catch {
+      // Keep cached if network fails
+    }
     finally { setMessagesLoading(false); }
   }, [authFetch, fetchActiveConversations, fetchTotalUnread]);
 
-  useEffect(() => { if (activeContact) fetchMessages(activeContact.id); }, [activeContact, fetchMessages]);
+  // Load cached messages instantly when contact changes, then update from network
+  useEffect(() => {
+    if (activeContact) {
+      try {
+        const cached = localStorage.getItem(`pingme_cached_msgs_${activeContact.id}`);
+        if (cached) {
+          setMessages(JSON.parse(cached));
+        } else {
+          setMessages([]);
+        }
+      } catch {
+        setMessages([]);
+      }
+      fetchMessages(activeContact.id);
+    }
+  }, [activeContact, fetchMessages]);
+
+  // Sync state changes back to cache in real time
+  useEffect(() => {
+    if (activeContact?.id && messages.length > 0) {
+      try {
+        localStorage.setItem(`pingme_cached_msgs_${activeContact.id}`, JSON.stringify(messages));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [messages, activeContact?.id]);
+
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   // ── Socket.io: receive realtime messages ────────────────────────────────────
@@ -508,18 +569,26 @@ const GeneralApp = () => {
                     <CaretLeft size={24} weight="bold" />
                   </IconButton>
                 )}
-                <Avatar src={activeContact.avatar} sx={{ width: 40, height: 40 }} />
-                <Box>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="subtitle1" fontWeight={700}>{activeContact.username}</Typography>
-                    {blockedUsers.has(activeContact.id) && (
-                      <Chip label="Blocked" size="small" color="error" variant="outlined" sx={{ height: 20, fontSize: 10, fontWeight: 700 }} />
-                    )}
-                  </Stack>
-                  <Typography variant="caption" sx={{ color: Number(activeContact.is_online) === 1 ? "#4CAF50" : "text.secondary" }}>
-                    {Number(activeContact.is_online) === 1 ? "Online" : formatLastSeen(activeContact.last_seen)}
-                  </Typography>
-                </Box>
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  alignItems="center"
+                  onClick={() => setShowContactInfo(true)}
+                  sx={{ cursor: "pointer" }}
+                >
+                  <Avatar src={activeContact.avatar} sx={{ width: 40, height: 40 }} />
+                  <Box>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="subtitle1" fontWeight={700}>{activeContact.username}</Typography>
+                      {blockedUsers.has(activeContact.id) && (
+                        <Chip label="Blocked" size="small" color="error" variant="outlined" sx={{ height: 20, fontSize: 10, fontWeight: 700 }} />
+                      )}
+                    </Stack>
+                    <Typography variant="caption" sx={{ color: Number(activeContact.is_online) === 1 ? "#4CAF50" : "text.secondary" }}>
+                      {Number(activeContact.is_online) === 1 ? "Online" : formatLastSeen(activeContact.last_seen)}
+                    </Typography>
+                  </Box>
+                </Stack>
               </Box>
               <Stack direction="row" spacing={1}>
                 <Tooltip title="Audio Call">
@@ -715,14 +784,16 @@ const GeneralApp = () => {
               {/* ── 3. Contact Info Panel (Side) ───────────────────────── */}
               {showContactInfo && !isMobile && (
                 <Box sx={{
-                  width: 320,
+                  width: 300,
                   bgcolor: "background.paper",
                   borderLeft: "1px solid",
                   borderColor: "divider",
                   height: "100%",
                   display: "flex",
-                  flexDirection: "column"
+                  flexDirection: "column",
+                  overflowY: "auto"
                 }}>
+                  {/* Header */}
                   <Box p={2} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <Typography variant="subtitle1" fontWeight={700}>Contact Info</Typography>
                     <IconButton onClick={() => setShowContactInfo(false)} size="small">
@@ -730,26 +801,212 @@ const GeneralApp = () => {
                     </IconButton>
                   </Box>
                   <Divider />
-                  <Box p={3} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                    <Avatar src={activeContact.avatar} sx={{ width: 120, height: 120, mb: 1 }} />
+
+                  {/* Avatar + Name */}
+                  <Box p={3} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
+                    <Box
+                      onClick={() => setAvatarOpen(true)}
+                      sx={{
+                        cursor: "pointer",
+                        borderRadius: "50%",
+                        border: "3px solid",
+                        borderColor: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)",
+                        transition: "transform 0.2s, box-shadow 0.2s",
+                        "&:hover": { transform: "scale(1.05)", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }
+                      }}
+                    >
+                      <Avatar
+                        src={contactProfile?.avatar || activeContact.avatar}
+                        sx={{ width: 110, height: 110 }}
+                      />
+                    </Box>
                     <Box textAlign="center">
-                      <Typography variant="h6" fontWeight={700}>{activeContact.username}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {Number(activeContact.is_online) === 1 ? "Online" : formatLastSeen(activeContact.last_seen)}
+                      <Typography variant="h6" fontWeight={800} sx={{ letterSpacing: -0.5 }}>
+                        {activeContact.username}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: Number(activeContact.is_online) === 1 ? "#4CAF50" : "text.secondary", fontWeight: 600 }}>
+                        {Number(activeContact.is_online) === 1 ? "● Online" : formatLastSeen(activeContact.last_seen)}
                       </Typography>
                     </Box>
                   </Box>
                   <Divider />
-                  <Box p={2}>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: "uppercase", fontWeight: 700, mb: 1, display: "block" }}>About / Bio</Typography>
-                    <Typography variant="body2">{activeContact.bio || "No bio available"}</Typography>
+
+                  {/* Details */}
+                  <Box p={2.5} sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {/* Username row */}
+                    <Stack direction="row" alignItems="center" spacing={1.5}>
+                      <Box sx={{ color: "text.secondary", flexShrink: 0 }}><User size={18} /></Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>Username</Typography>
+                        <Typography variant="body2" fontWeight={600}>{activeContact.username}</Typography>
+                      </Box>
+                    </Stack>
+
+                    {/* Email row — only if contact allows it */}
+                    {contactProfile === null ? (
+                      <Stack direction="row" alignItems="center" spacing={1.5}>
+                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
+                        <CircularProgress size={14} />
+                      </Stack>
+                    ) : contactProfile?.email ? (
+                      <Stack direction="row" alignItems="center" spacing={1.5}>
+                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>Email</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ wordBreak: "break-all" }}>{contactProfile.email}</Typography>
+                        </Box>
+                      </Stack>
+                    ) : (
+                      <Stack direction="row" alignItems="center" spacing={1.5}>
+                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>Email</Typography>
+                          <Typography variant="body2" color="text.disabled" sx={{ fontStyle: "italic" }}>Hidden by user</Typography>
+                        </Box>
+                      </Stack>
+                    )}
                   </Box>
                   <Divider />
-                  <Box p={2}>
-                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: "uppercase", fontWeight: 700, mb: 1, display: "block" }}>Media, Links & Docs</Typography>
-                    <Typography variant="body2" color="text.disabled">None shared recently</Typography>
+
+                  {/* Bio */}
+                  <Box p={2.5}>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: "uppercase", fontWeight: 700, mb: 0.8, display: "block", fontSize: 10, letterSpacing: 0.8 }}>About / Bio</Typography>
+                    <Typography variant="body2" sx={{ lineHeight: 1.6, color: contactProfile?.bio ? "text.primary" : "text.disabled", fontStyle: contactProfile?.bio ? "normal" : "italic" }}>
+                      {contactProfile?.bio || (contactProfile === null ? "" : "No bio set")}
+                    </Typography>
                   </Box>
                 </Box>
+              )}
+
+              {/* Avatar Lightbox */}
+              <Dialog
+                open={avatarOpen}
+                onClose={() => setAvatarOpen(false)}
+                maxWidth="xs"
+                fullWidth
+                PaperProps={{
+                  sx: {
+                    bgcolor: "transparent",
+                    boxShadow: "none",
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    m: 2
+                  }
+                }}
+                sx={{ "& .MuiBackdrop-root": { bgcolor: "rgba(0,0,0,0.85)" } }}
+              >
+                <DialogContent sx={{ p: 0, borderRadius: "50%", overflow: "hidden" }}>
+                  <Avatar
+                    src={contactProfile?.avatar || activeContact?.avatar}
+                    sx={{
+                      width: "100%",
+                      height: "auto",
+                      aspectRatio: "1",
+                      borderRadius: "50%",
+                      display: "block"
+                    }}
+                  />
+                </DialogContent>
+              </Dialog>
+
+              {/* Mobile Contact Info Dialog */}
+              {showContactInfo && isMobile && (
+                <Dialog
+                  open={showContactInfo}
+                  onClose={() => setShowContactInfo(false)}
+                  fullWidth
+                  maxWidth="xs"
+                  PaperProps={{
+                    sx: {
+                      bgcolor: "background.paper",
+                      borderRadius: 4,
+                      p: 1
+                    }
+                  }}
+                  sx={{ "& .MuiBackdrop-root": { bgcolor: "rgba(0,0,0,0.5)" } }}
+                >
+                  <Box p={2} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <Typography variant="subtitle1" fontWeight={700}>Contact Info</Typography>
+                    <IconButton onClick={() => setShowContactInfo(false)} size="small">
+                      <X size={20} />
+                    </IconButton>
+                  </Box>
+                  <Divider />
+
+                  {/* Avatar + Name */}
+                  <Box p={3} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
+                    <Box
+                      onClick={() => setAvatarOpen(true)}
+                      sx={{
+                        cursor: "pointer",
+                        borderRadius: "50%",
+                        border: "3px solid",
+                        borderColor: isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.1)",
+                        transition: "transform 0.2s, box-shadow 0.2s",
+                        "&:hover": { transform: "scale(1.05)", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }
+                      }}
+                    >
+                      <Avatar
+                        src={contactProfile?.avatar || activeContact.avatar}
+                        sx={{ width: 110, height: 110 }}
+                      />
+                    </Box>
+                    <Box textAlign="center">
+                      <Typography variant="h6" fontWeight={800} sx={{ letterSpacing: -0.5 }}>
+                        {activeContact.username}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: Number(activeContact.is_online) === 1 ? "#4CAF50" : "text.secondary", fontWeight: 600 }}>
+                        {Number(activeContact.is_online) === 1 ? "● Online" : formatLastSeen(activeContact.last_seen)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Divider />
+
+                  {/* Details */}
+                  <Box p={2.5} sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {/* Username row */}
+                    <Stack direction="row" alignItems="center" spacing={1.5}>
+                      <Box sx={{ color: "text.secondary", flexShrink: 0 }}><User size={18} /></Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>Username</Typography>
+                        <Typography variant="body2" fontWeight={600}>{activeContact.username}</Typography>
+                      </Box>
+                    </Stack>
+
+                    {/* Email row — only if contact allows it */}
+                    {contactProfile === null ? (
+                      <Stack direction="row" alignItems="center" spacing={1.5}>
+                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
+                        <CircularProgress size={14} />
+                      </Stack>
+                    ) : contactProfile?.email ? (
+                      <Stack direction="row" alignItems="center" spacing={1.5}>
+                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>Email</Typography>
+                          <Typography variant="body2" fontWeight={600} sx={{ wordBreak: "break-all" }}>{contactProfile.email}</Typography>
+                        </Box>
+                      </Stack>
+                    ) : (
+                      <Stack direction="row" alignItems="center" spacing={1.5}>
+                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>Email</Typography>
+                          <Typography variant="body2" color="text.disabled" sx={{ fontStyle: "italic" }}>Hidden by user</Typography>
+                        </Box>
+                      </Stack>
+                    )}
+                  </Box>
+                  <Divider />
+
+                  {/* Bio */}
+                  <Box p={2.5}>
+                    <Typography variant="caption" color="text.secondary" sx={{ textTransform: "uppercase", fontWeight: 700, mb: 0.8, display: "block", fontSize: 10, letterSpacing: 0.8 }}>About / Bio</Typography>
+                    <Typography variant="body2" sx={{ lineHeight: 1.6, color: contactProfile?.bio ? "text.primary" : "text.disabled", fontStyle: contactProfile?.bio ? "normal" : "italic" }}>
+                      {contactProfile?.bio || (contactProfile === null ? "" : "No bio set")}
+                    </Typography>
+                  </Box>
+                </Dialog>
               )}
             </Stack>
 

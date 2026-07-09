@@ -44,6 +44,7 @@ const AgoraCallModal = ({ callState, onAccept, onDecline, socket }) => {
     const [status, setStatus] = useState(""); // Connecting, Ringing, In call
     const [userProfiles, setUserProfiles] = useState({});
     const [groupMembers, setGroupMembers] = useState([]);
+    const [facingMode, setFacingMode] = useState("user"); // "user"=front, "environment"=back
 
     useEffect(() => {
         if (open && isGroup && contact?.id) {
@@ -141,6 +142,29 @@ const AgoraCallModal = ({ callState, onAccept, onDecline, socket }) => {
         setRemoteUsers([]);
         setCallSeconds(0);
     }, []);
+
+    // Switch between front and back camera
+    const switchCamera = useCallback(async () => {
+        if (!clientRef.current || !localVideoRef.current) return;
+        const newFacingMode = facingMode === "user" ? "environment" : "user";
+        try {
+            // Unpublish and close old track
+            await clientRef.current.unpublish([localVideoRef.current]);
+            localVideoRef.current.close();
+            // Create new track with opposite facingMode
+            const newVideoTrack = await AgoraRTC.createCameraVideoTrack({
+                facingMode: newFacingMode
+            });
+            localVideoRef.current = newVideoTrack;
+            await clientRef.current.publish([newVideoTrack]);
+            // Re-play local preview
+            const localEl = document.getElementById("local-video");
+            if (localEl) newVideoTrack.play("local-video");
+            setFacingMode(newFacingMode);
+        } catch (err) {
+            console.error("[Camera switch] Error:", err.message);
+        }
+    }, [facingMode]);
 
     const joinChannel = useCallback(async () => {
         if (!currentUser || !contact || joinedRef.current) return;
@@ -372,47 +396,66 @@ const AgoraCallModal = ({ callState, onAccept, onDecline, socket }) => {
 
             {/* Remote Video(s) Grid / Avatar */}
             {isVideo && remoteUsers.length > 0 ? (
-                <Box sx={{
-                    position: "absolute", inset: 0, zIndex: 1,
-                    display: "grid",
-                    gridTemplateColumns: remoteUsers.length === 1 ? "1fr" : (remoteUsers.length === 2 ? "1fr" : "1fr 1fr"),
-                    gridTemplateRows: remoteUsers.length <= 2 ? "1fr 1fr" : "1fr 1fr",
-                    gap: 1.5,
-                    p: 2,
-                    pt: 18,
-                    pb: 18,
-                    bgcolor: "#111"
-                }}>
-                    {remoteUsers.map((user) => (
+                remoteUsers.length === 1 ? (
+                    // ── Single remote user: full-screen ─────────────────────────
+                    <Box sx={{ position: "absolute", inset: 0, zIndex: 1, bgcolor: "#111" }}>
                         <Box
-                            key={user.uid}
-                            sx={{
-                                width: "100%", height: "100%",
-                                position: "relative",
-                                borderRadius: 3, overflow: "hidden",
-                                border: "2px solid rgba(255,255,255,0.1)",
-                                bgcolor: "#222"
-                            }}
-                        >
+                            id={`remote-video-${remoteUsers[0].uid}`}
+                            sx={{ width: "100%", height: "100%", "& video": { objectFit: "cover !important", width: "100% !important", height: "100% !important" } }}
+                        />
+                        <Box sx={{
+                            position: "absolute", bottom: 100, left: 16,
+                            bgcolor: "rgba(0,0,0,0.55)", px: 1.5, py: 0.5,
+                            borderRadius: 1.5, color: "#fff", pointerEvents: "none", zIndex: 5
+                        }}>
+                            <Typography variant="caption" fontWeight={600}>
+                                {userProfiles[remoteUsers[0].uid]?.username || `User ${remoteUsers[0].uid}`}
+                            </Typography>
+                        </Box>
+                    </Box>
+                ) : (
+                    // ── Multiple remote users: adaptive grid ─────────────────
+                    <Box sx={{
+                        position: "absolute", inset: 0, zIndex: 1,
+                        display: "grid",
+                        gridTemplateColumns: remoteUsers.length === 2 ? "1fr 1fr" :
+                            remoteUsers.length <= 4 ? "1fr 1fr" :
+                            "1fr 1fr 1fr",
+                        gridAutoRows: "1fr",
+                        gap: 0.75,
+                        p: 0.75,
+                        pt: "64px",
+                        pb: "120px",
+                        bgcolor: "#111"
+                    }}>
+                        {remoteUsers.map((user) => (
                             <Box
-                                id={`remote-video-${user.uid}`}
+                                key={user.uid}
                                 sx={{
                                     width: "100%", height: "100%",
-                                    "& video": { objectFit: "cover !important" }
+                                    position: "relative",
+                                    borderRadius: 2, overflow: "hidden",
+                                    border: "1.5px solid rgba(255,255,255,0.1)",
+                                    bgcolor: "#222"
                                 }}
-                            />
-                            <Box sx={{
-                                position: "absolute", bottom: 8, left: 8,
-                                bgcolor: "rgba(0,0,0,0.6)", px: 1, py: 0.5,
-                                borderRadius: 1, color: "#fff", pointerEvents: "none", zIndex: 5
-                            }}>
-                                <Typography variant="caption" fontWeight={600}>
-                                    {userProfiles[user.uid]?.username || `User ${user.uid}`}
-                                </Typography>
+                            >
+                                <Box
+                                    id={`remote-video-${user.uid}`}
+                                    sx={{ width: "100%", height: "100%", "& video": { objectFit: "cover !important" } }}
+                                />
+                                <Box sx={{
+                                    position: "absolute", bottom: 6, left: 6,
+                                    bgcolor: "rgba(0,0,0,0.6)", px: 1, py: 0.3,
+                                    borderRadius: 1, color: "#fff", pointerEvents: "none", zIndex: 5
+                                }}>
+                                    <Typography variant="caption" fontWeight={600} sx={{ fontSize: 11 }}>
+                                        {userProfiles[user.uid]?.username || `User ${user.uid}`}
+                                    </Typography>
+                                </Box>
                             </Box>
-                        </Box>
-                    ))}
-                </Box>
+                        ))}
+                    </Box>
+                )
             ) : (
                 <Stack alignItems="center" justifyContent="center" sx={{ position: "absolute", inset: 0, zIndex: 1, width: "100%" }}>
                     <Avatar
@@ -570,15 +613,15 @@ const AgoraCallModal = ({ callState, onAccept, onDecline, socket }) => {
                 </Typography>
             </Stack>
 
-            {/* Local Video (PiP) */}
+            {/* Local Video (PiP) — bottom-right corner so it doesn't block remote */}
             {joined && isVideo && !camOff && (
                 <Box
                     id="local-video"
                     sx={{
-                        position: "absolute", top: 40, right: 20, zIndex: 10,
-                        width: 110, height: 160, borderRadius: 3,
-                        border: "2px solid rgba(255,255,255,0.3)",
-                        boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+                        position: "absolute", bottom: 140, right: 16, zIndex: 10,
+                        width: 100, height: 148, borderRadius: 3,
+                        border: "2px solid rgba(255,255,255,0.35)",
+                        boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
                         overflow: "hidden", bgcolor: "#111",
                         "& video": { objectFit: "cover !important" }
                     }}
@@ -648,7 +691,11 @@ const AgoraCallModal = ({ callState, onAccept, onDecline, socket }) => {
                         </IconButton>
 
                         {isVideo && (
-                            <IconButton sx={{ color: "#fff" }}>
+                            <IconButton
+                                onClick={switchCamera}
+                                sx={{ color: "#fff" }}
+                                title="Switch camera"
+                            >
                                 <ArrowCounterClockwise size={28} weight="bold" />
                             </IconButton>
                         )}

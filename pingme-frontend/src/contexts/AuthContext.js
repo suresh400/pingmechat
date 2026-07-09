@@ -77,8 +77,31 @@ export const AuthProvider = ({ children }) => {
         [token]
     );
 
+    // Atomically update currentUser in both React state and localStorage
+    const updateCurrentUser = useCallback((userData) => {
+        const merged = { ...currentUser, ...userData };
+        localStorage.setItem("chatapp_user", JSON.stringify(merged));
+        setCurrentUser(merged);
+    }, [currentUser]);
+
+    // Re-fetch the latest user profile from the server and sync it
+    const refreshUser = useCallback(async () => {
+        if (!token) return;
+        try {
+            const res = await fetch(`${API_BASE}/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            localStorage.setItem("chatapp_user", JSON.stringify({ ...currentUser, ...data }));
+            setCurrentUser(prev => ({ ...prev, ...data }));
+        } catch (err) {
+            console.error("[refreshUser] Failed:", err.message);
+        }
+    }, [token, currentUser]);
+
     return (
-        <AuthContext.Provider value={{ currentUser, token, login, logout, register, authFetch, isAuthenticated: !!token }}>
+        <AuthContext.Provider value={{ currentUser, token, login, logout, register, authFetch, isAuthenticated: !!token, updateCurrentUser, refreshUser }}>
             {children}
         </AuthContext.Provider>
     );

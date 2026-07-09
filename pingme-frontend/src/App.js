@@ -7,7 +7,9 @@ import { SocketProvider } from "./contexts/SocketContext";
 import SplashScreen from "./components/SplashScreen";
 
 function App() {
-  const [showSplash, setShowSplash] = useState(true);
+  // Only show splash on first-ever visit; returning users (who have a token) skip it
+  const isReturningUser = !!localStorage.getItem("chatapp_token");
+  const [showSplash, setShowSplash] = useState(!isReturningUser);
 
   return (
     <AuthProvider>

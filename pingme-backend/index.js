@@ -509,6 +509,16 @@ app.get("/api/auth/check-username", async (req, res) => {
     }
 });
 
+// Get total registered users count (public endpoint)
+app.get("/api/auth/users-count", async (req, res) => {
+    try {
+        const [rows] = await db.query("SELECT COUNT(*) AS total FROM users");
+        res.json({ total: rows[0]?.total || 0 });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 // Register
 app.post("/api/auth/register", validateRegister, async (req, res) => {
     const { username, email, password } = req.body;
@@ -885,9 +895,14 @@ app.get("/api/contacts/blocked", verifyToken, async (req, res) => {
 // File Upload endpoint
 app.post("/api/upload", verifyToken, upload.single("file"), (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded." });
-    const fileUrl = `/uploads/${req.file.filename}`;
+    // Return a full absolute URL so the avatar works in production (not just localhost)
+    const baseUrl = process.env.BASE_URL ||
+        (process.env.RENDER_EXTERNAL_URL) ||
+        `${req.protocol}://${req.get("host")}`;
+    const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
     res.json({ url: fileUrl });
 });
+
 
 // Get active conversations (users with whom messages have been exchanged)
 app.get("/api/contacts/active", verifyToken, async (req, res) => {
@@ -944,6 +959,43 @@ app.get("/api/users/batch", verifyToken, async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
+
+// Get a user's public profile (username always, email only if they allow it)
+app.get("/api/users/:id/profile", verifyToken, async (req, res) => {
+    try {
+        const [rows] = await db.query(
+            "SELECT id, username, email, avatar, bio, show_email, is_online, last_seen FROM users WHERE id = ?",
+            [req.params.id]
+        );
+        if (rows.length === 0) return res.status(404).json({ message: "User not found." });
+        const user = rows[0];
+        // Only expose email if the user has opted in (show_email defaults true)
+        res.json({
+            id: user.id,
+            username: user.username,
+            avatar: user.avatar,
+            bio: user.bio,
+            is_online: user.is_online,
+            last_seen: user.last_seen,
+            email: user.show_email !== false ? user.email : null,
+            show_email: user.show_email !== false,
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Toggle show_email preference
+app.put("/api/auth/show-email", verifyToken, async (req, res) => {
+    const { show_email } = req.body;
+    try {
+        await db.query("UPDATE users SET show_email = ? WHERE id = ?", [show_email ? 1 : 0, req.user.id]);
+        res.json({ message: "Preference updated.", show_email: !!show_email });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 
 app.get("/api/messages/unread/total", verifyToken, async (req, res) => {
     try {

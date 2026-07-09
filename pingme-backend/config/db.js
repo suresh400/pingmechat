@@ -45,6 +45,7 @@ const UserSchema = new mongoose.Schema({
   password: { type: String },
   avatar: { type: String },
   bio: { type: String, default: "Hey there! I am using PingMe." },
+  show_email: { type: Boolean, default: true },
   is_online: { type: Number, default: 0 },
   last_seen: { type: Date, default: Date.now },
   created_at: { type: Date, default: Date.now }
@@ -408,11 +409,27 @@ async function handleSelect(sl, p) {
   }
 
   if (sl.includes("created_at from users where id")) {
-    return R(await User.find({ id: Number(p[0]) }).select("id username email avatar bio created_at").lean());
+    const u = await User.findOne({ id: Number(p[0]) }).lean();
+    if (!u) return R([]);
+    return R([{ id: u.id, username: u.username, email: u.email, avatar: u.avatar, bio: u.bio, show_email: u.show_email !== false, created_at: u.created_at }]);
   }
 
   if (sl.includes("last_seen from users where id")) {
-    return R(await User.find({ id: Number(p[0]) }).select("id username email avatar bio is_online last_seen").lean());
+    const u = await User.findOne({ id: Number(p[0]) }).lean();
+    if (!u) return R([]);
+    return R([{ id: u.id, username: u.username, email: u.email, avatar: u.avatar, bio: u.bio, show_email: u.show_email !== false, is_online: u.is_online, last_seen: u.last_seen }]);
+  }
+
+  // Full public profile for a single user
+  if (sl.includes("show_email from users where id")) {
+    const u = await User.findOne({ id: Number(p[0]) }).lean();
+    if (!u) return R([]);
+    return R([{ id: u.id, username: u.username, email: u.email, avatar: u.avatar, bio: u.bio, show_email: u.show_email !== false, is_online: u.is_online, last_seen: u.last_seen }]);
+  }
+
+  if (sl.includes("count(*) as total from users")) {
+    const total = await User.countDocuments();
+    return R([{ total }]);
   }
 
   // messages
@@ -644,7 +661,15 @@ async function handleUpdate(sl, p) {
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update users set username") && sl.includes("bio") && sl.includes("avatar")) {
-    const res = await User.updateOne({ id: Number(p[3]) }, { username: p[0], bio: p[1], avatar: p[2] });
+    // Use $set explicitly so empty string bio is saved (not treated as falsy)
+    const res = await User.updateOne(
+      { id: Number(p[3]) },
+      { $set: { username: p[0], bio: p[1] !== undefined ? p[1] : "", avatar: p[2] } }
+    );
+    return [{ affectedRows: res.modifiedCount }];
+  }
+  if (sl.includes("update users set show_email")) {
+    const res = await User.updateOne({ id: Number(p[1]) }, { $set: { show_email: Boolean(p[0]) } });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update users set password") && sl.includes("where id")) {
