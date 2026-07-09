@@ -17,13 +17,18 @@ const RegisterPage = () => {
     const [form, setForm] = useState({ username: "", email: "", password: "", confirm: "" });
     const [showPw, setShowPw] = useState(false);
     const [error, setError] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
     const [loading, setLoading] = useState(false);
+
+    // OTP verification mode
+    const [otpRequired, setOtpRequired] = useState(false);
+    const [otp, setOtp] = useState("");
 
     // Live username check
     const [usernameStatus, setUsernameStatus] = useState(null); // null | 'checking' | 'available' | 'taken'
 
     useEffect(() => {
-        if (!form.username.trim() || form.username.length < 3) { setUsernameStatus(null); return; }
+        if (otpRequired || !form.username.trim() || form.username.length < 3) { setUsernameStatus(null); return; }
         setUsernameStatus("checking");
         const timer = setTimeout(async () => {
             try {
@@ -33,20 +38,46 @@ const RegisterPage = () => {
             } catch { setUsernameStatus(null); }
         }, 400);
         return () => clearTimeout(timer);
-    }, [form.username]);
+    }, [form.username, otpRequired]);
 
     const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
-        if (usernameStatus === "taken") { setError("Username is already taken."); return; }
-        if (form.password !== form.confirm) { setError("Passwords do not match."); return; }
-        if (form.password.length < 6) { setError("Password must be at least 6 characters."); return; }
+        setSuccessMessage("");
+        if (!otpRequired) {
+            if (usernameStatus === "taken") { setError("Username is already taken."); return; }
+            if (form.password !== form.confirm) { setError("Passwords do not match."); return; }
+            if (form.password.length < 8) { setError("Password must be at least 8 characters."); return; }
+        } else {
+            if (otp.length !== 6) { setError("Please enter a valid 6-digit verification code."); return; }
+        }
         setLoading(true);
         try {
-            await register(form.username, form.email, form.password);
-            navigate("/app");
+            const res = await register(form.username, form.email, form.password, otpRequired ? otp : undefined);
+            if (res && res.otpRequired) {
+                setOtpRequired(true);
+                setSuccessMessage(res.message);
+            } else {
+                navigate("/app");
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResendOtp = async () => {
+        setError("");
+        setSuccessMessage("");
+        setLoading(true);
+        try {
+            const res = await register(form.username, form.email, form.password);
+            if (res && res.otpRequired) {
+                setSuccessMessage("Verification code resent successfully.");
+            }
         } catch (err) {
             setError(err.message);
         } finally {
@@ -120,117 +151,187 @@ const RegisterPage = () => {
                     <Typography variant="body2" sx={{ color: "rgba(255, 255, 255, 0.6)" }}>Join PingMe — chat, connect, belong</Typography>
                 </Stack>
 
+                {successMessage && <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>{successMessage}</Alert>}
                 {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{error}</Alert>}
 
                 <form onSubmit={handleSubmit}>
                     <Stack spacing={2.5}>
-                        <TextField
-                            label="Username"
-                            name="username"
-                            fullWidth required
-                            value={form.username}
-                            onChange={handleChange}
-                            variant="outlined" size="small"
-                            error={usernameStatus === "taken"}
-                            helperText={usernameStatus === "taken" ? "Username already taken" : usernameStatus === "available" ? "✓ Username available" : ""}
-                            FormHelperTextProps={{ sx: { color: usernameStatus === "available" ? "#4CAF50" : "error.main", fontWeight: 600 } }}
-                            InputProps={{ endAdornment: <InputAdornment position="end" sx={{ color: "rgba(255, 255, 255, 0.6)" }}>{usernameAdornment()}</InputAdornment> }}
-                            sx={{
-                                "& .MuiInputBase-input": { color: "#fff" },
-                                "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
-                                "& .MuiInputLabel-root.Mui-focused": { color: "#3B82F6" },
-                                "& .MuiOutlinedInput-root": {
-                                    "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
-                                    "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-                                    "&.Mui-focused fieldset": { borderColor: "#3B82F6" },
-                                },
-                            }}
-                        />
-                        <TextField
-                            label="Email address"
-                            name="email"
-                            type="email"
-                            fullWidth required
-                            value={form.email}
-                            onChange={handleChange}
-                            variant="outlined" size="small"
-                            sx={{
-                                "& .MuiInputBase-input": { color: "#fff" },
-                                "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
-                                "& .MuiInputLabel-root.Mui-focused": { color: "#3B82F6" },
-                                "& .MuiOutlinedInput-root": {
-                                    "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
-                                    "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-                                    "&.Mui-focused fieldset": { borderColor: "#3B82F6" },
-                                },
-                            }}
-                        />
-                        <TextField
-                            label="Password"
-                            name="password"
-                            type={showPw ? "text" : "password"}
-                            fullWidth required
-                            value={form.password}
-                            onChange={handleChange}
-                            variant="outlined" size="small"
-                            InputProps={{
-                                endAdornment: (
-                                    <InputAdornment position="end">
-                                        <IconButton onClick={() => setShowPw(!showPw)} edge="end" size="small" sx={{ color: "rgba(255, 255, 255, 0.6)" }}>
-                                            {showPw ? <EyeSlash size={18} /> : <Eye size={18} />}
-                                        </IconButton>
-                                    </InputAdornment>
-                                ),
-                            }}
-                            sx={{
-                                "& .MuiInputBase-input": { color: "#fff" },
-                                "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
-                                "& .MuiInputLabel-root.Mui-focused": { color: "#3B82F6" },
-                                "& .MuiOutlinedInput-root": {
-                                    "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
-                                    "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-                                    "&.Mui-focused fieldset": { borderColor: "#3B82F6" },
-                                },
-                            }}
-                        />
-                        <TextField
-                            label="Confirm Password"
-                            name="confirm"
-                            type="password"
-                            fullWidth required
-                            value={form.confirm}
-                            onChange={handleChange}
-                            variant="outlined" size="small"
-                            sx={{
-                                "& .MuiInputBase-input": { color: "#fff" },
-                                "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
-                                "& .MuiInputLabel-root.Mui-focused": { color: "#3B82F6" },
-                                "& .MuiOutlinedInput-root": {
-                                    "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
-                                    "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-                                    "&.Mui-focused fieldset": { borderColor: "#3B82F6" },
-                                },
-                            }}
-                        />
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            fullWidth
-                            disabled={loading || usernameStatus === "taken" || usernameStatus === "checking"}
-                            sx={{
-                                backgroundColor: "#fff",
-                                color: "#000",
-                                borderRadius: 2,
-                                py: 1.2,
-                                fontWeight: 800,
-                                textTransform: "none",
-                                fontSize: 15,
-                                "&:hover": { backgroundColor: "#e5e5e5" },
-                                "&.Mui-disabled": { backgroundColor: "rgba(255, 255, 255, 0.3)", color: "rgba(0,0,0,0.5)" }
-                            }}
-                        >
-                            {loading ? <CircularProgress size={22} color="inherit" /> : "Create Account"}
-                        </Button>
+                        {!otpRequired ? (
+                            <>
+                                <TextField
+                                    label="Username"
+                                    name="username"
+                                    fullWidth required
+                                    value={form.username}
+                                    onChange={handleChange}
+                                    variant="outlined" size="small"
+                                    error={usernameStatus === "taken"}
+                                    helperText={usernameStatus === "taken" ? "Username already taken" : usernameStatus === "available" ? "✓ Username available" : ""}
+                                    FormHelperTextProps={{ sx: { color: usernameStatus === "available" ? "#4CAF50" : "error.main", fontWeight: 600 } }}
+                                    InputProps={{ endAdornment: <InputAdornment position="end" sx={{ color: "rgba(255, 255, 255, 0.6)" }}>{usernameAdornment()}</InputAdornment> }}
+                                    sx={{
+                                        "& .MuiInputBase-input": { color: "#fff" },
+                                        "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
+                                        "& .MuiInputLabel-root.Mui-focused": { color: "#3B82F6" },
+                                        "& .MuiOutlinedInput-root": {
+                                            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
+                                            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
+                                            "&.Mui-focused fieldset": { borderColor: "#3B82F6" },
+                                        },
+                                    }}
+                                />
+                                <TextField
+                                    label="Email address"
+                                    name="email"
+                                    type="email"
+                                    fullWidth required
+                                    value={form.email}
+                                    onChange={handleChange}
+                                    variant="outlined" size="small"
+                                    sx={{
+                                        "& .MuiInputBase-input": { color: "#fff" },
+                                        "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
+                                        "& .MuiInputLabel-root.Mui-focused": { color: "#3B82F6" },
+                                        "& .MuiOutlinedInput-root": {
+                                            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
+                                            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
+                                            "&.Mui-focused fieldset": { borderColor: "#3B82F6" },
+                                        },
+                                    }}
+                                />
+                                <TextField
+                                    label="Password"
+                                    name="password"
+                                    type={showPw ? "text" : "password"}
+                                    fullWidth required
+                                    value={form.password}
+                                    onChange={handleChange}
+                                    variant="outlined" size="small"
+                                    InputProps={{
+                                        endAdornment: (
+                                            <InputAdornment position="end">
+                                                <IconButton onClick={() => setShowPw(!showPw)} edge="end" size="small" sx={{ color: "rgba(255, 255, 255, 0.6)" }}>
+                                                    {showPw ? <EyeSlash size={18} /> : <Eye size={18} />}
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ),
+                                    }}
+                                    sx={{
+                                        "& .MuiInputBase-input": { color: "#fff" },
+                                        "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
+                                        "& .MuiInputLabel-root.Mui-focused": { color: "#3B82F6" },
+                                        "& .MuiOutlinedInput-root": {
+                                            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
+                                            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
+                                            "&.Mui-focused fieldset": { borderColor: "#3B82F6" },
+                                        },
+                                    }}
+                                />
+                                <TextField
+                                    label="Confirm Password"
+                                    name="confirm"
+                                    type="password"
+                                    fullWidth required
+                                    value={form.confirm}
+                                    onChange={handleChange}
+                                    variant="outlined" size="small"
+                                    sx={{
+                                        "& .MuiInputBase-input": { color: "#fff" },
+                                        "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
+                                        "& .MuiInputLabel-root.Mui-focused": { color: "#3B82F6" },
+                                        "& .MuiOutlinedInput-root": {
+                                            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
+                                            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
+                                            "&.Mui-focused fieldset": { borderColor: "#3B82F6" },
+                                        },
+                                    }}
+                                />
+                                <Button
+                                    type="submit"
+                                    variant="contained"
+                                    fullWidth
+                                    disabled={loading || usernameStatus === "taken" || usernameStatus === "checking"}
+                                    sx={{
+                                        backgroundColor: "#fff",
+                                        color: "#000",
+                                        borderRadius: 2,
+                                        py: 1.2,
+                                        fontWeight: 800,
+                                        textTransform: "none",
+                                        fontSize: 15,
+                                        "&:hover": { backgroundColor: "#e5e5e5" },
+                                        "&.Mui-disabled": { backgroundColor: "rgba(255, 255, 255, 0.3)", color: "rgba(0,0,0,0.5)" }
+                                    }}
+                                >
+                                    {loading ? <CircularProgress size={22} color="inherit" /> : "Create Account"}
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <TextField
+                                    label="6-Digit Verification Code"
+                                    name="otp"
+                                    fullWidth required
+                                    value={otp}
+                                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                                    variant="outlined" size="small"
+                                    placeholder="123456"
+                                    sx={{
+                                        "& .MuiInputBase-input": { color: "#fff" },
+                                        "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
+                                        "& .MuiInputLabel-root.Mui-focused": { color: "#3B82F6" },
+                                        "& .MuiOutlinedInput-root": {
+                                            "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
+                                            "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
+                                            "&.Mui-focused fieldset": { borderColor: "#3B82F6" },
+                                        },
+                                    }}
+                                />
+                                <Button
+                                    type="submit"
+                                    variant="contained"
+                                    fullWidth
+                                    disabled={loading || otp.length !== 6}
+                                    sx={{
+                                        backgroundColor: "#fff",
+                                        color: "#000",
+                                        borderRadius: 2,
+                                        py: 1.2,
+                                        fontWeight: 800,
+                                        textTransform: "none",
+                                        fontSize: 15,
+                                        "&:hover": { backgroundColor: "#e5e5e5" },
+                                        "&.Mui-disabled": { backgroundColor: "rgba(255, 255, 255, 0.3)", color: "rgba(0,0,0,0.5)" }
+                                    }}
+                                >
+                                    {loading ? <CircularProgress size={22} color="inherit" /> : "Verify & Create Account"}
+                                </Button>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center" mt={1}>
+                                    <Link
+                                        component="button"
+                                        type="button"
+                                        onClick={handleResendOtp}
+                                        disabled={loading}
+                                        sx={{ color: "#3B82F6", fontWeight: 700, fontSize: 13, textDecoration: "none", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
+                                    >
+                                        Resend Code
+                                    </Link>
+                                    <Link
+                                        component="button"
+                                        type="button"
+                                        onClick={() => {
+                                            setOtpRequired(false);
+                                            setOtp("");
+                                            setError("");
+                                            setSuccessMessage("");
+                                        }}
+                                        sx={{ color: "rgba(255,255,255,0.6)", fontWeight: 700, fontSize: 13, textDecoration: "none", cursor: "pointer", "&:hover": { color: "#fff" } }}
+                                    >
+                                        Edit Details
+                                    </Link>
+                                </Stack>
+                            </>
+                        )}
                     </Stack>
                 </form>
 

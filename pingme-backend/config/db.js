@@ -129,6 +129,16 @@ const BlockedUserSchema = new mongoose.Schema({
 BlockedUserSchema.index({ blocker_id: 1, blocked_id: 1 }, { unique: true });
 const BlockedUser = mongoose.model("BlockedUser", BlockedUserSchema);
 
+const FeedbackSchema = new mongoose.Schema({
+  id: { type: Number, unique: true },
+  user_id: { type: Number },
+  rating: { type: Number },
+  working_well: { type: String },
+  needs_change: { type: String },
+  submitted_at: { type: Date, default: Date.now }
+});
+const Feedback = mongoose.model("Feedback", FeedbackSchema);
+
 // ── Migration / Seed from db.json ──────────────────────────────────────────
 
 const seedIfEmpty = async () => {
@@ -408,6 +418,12 @@ async function handleSelect(sl, p) {
     }).select("id username avatar bio is_online last_seen").lean());
   }
 
+  if (sl.includes("username, email, avatar from users where id")) {
+    const u = await User.findOne({ id: Number(p[0]) }).lean();
+    if (!u) return R([]);
+    return R([{ username: u.username, email: u.email, avatar: u.avatar }]);
+  }
+
   if (sl.includes("created_at from users where id")) {
     const u = await User.findOne({ id: Number(p[0]) }).lean();
     if (!u) return R([]);
@@ -500,6 +516,10 @@ async function handleSelect(sl, p) {
     return R(await Otp.find({ id: Number(p[0]), user_id: Number(p[1]), used: false }).lean());
   }
 
+  if (sl.includes("from feedback")) {
+    return R(await Feedback.find({ user_id: Number(p[0]) }).lean());
+  }
+
   throw new Error(`[DB] Unhandled SELECT: ${sl.substring(0, 120)}`);
 }
 
@@ -520,6 +540,20 @@ async function handleInsert(sl, p) {
       created_at: new Date()
     });
     await user.save();
+    return [{ insertId: id, affectedRows: 1 }];
+  }
+
+  if (sl.includes("into feedback")) {
+    const id = await nextId("feedback");
+    const feedback = new Feedback({
+      id,
+      user_id: Number(p[0]),
+      rating: Number(p[1]),
+      working_well: p[2],
+      needs_change: p[3],
+      submitted_at: new Date()
+    });
+    await feedback.save();
     return [{ insertId: id, affectedRows: 1 }];
   }
 
@@ -686,6 +720,10 @@ async function handleUpdate(sl, p) {
     return [{ affectedRows: res.modifiedCount }];
   }
 
+  if (sl.includes("update password_reset_otps set used = true where email") && sl.includes("and used = false")) {
+    const res = await Otp.updateMany({ email: p[0], used: false }, { used: true });
+    return [{ affectedRows: res.modifiedCount }];
+  }
   if (sl.includes("update password_reset_otps set used = true where user_id")) {
     const res = await Otp.updateMany({ user_id: Number(p[0]), used: false }, { used: true });
     return [{ affectedRows: res.modifiedCount }];

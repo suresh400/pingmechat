@@ -35,14 +35,17 @@ export const AuthProvider = ({ children }) => {
         return data;
     }, []);
 
-    const register = useCallback(async (username, email, password) => {
+    const register = useCallback(async (username, email, password, otp) => {
         const res = await fetch(`${API_BASE}/auth/register`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, email, password }),
+            body: JSON.stringify({ username, email, password, otp }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(extractError(data, "Registration failed"));
+        if (data.otpRequired) {
+            return data;
+        }
         localStorage.setItem("chatapp_token", data.token);
         localStorage.setItem("chatapp_user", JSON.stringify(data.user));
         setToken(data.token);

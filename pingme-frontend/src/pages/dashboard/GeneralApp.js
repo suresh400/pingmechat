@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box, Stack, Avatar, Typography, InputBase, IconButton,
   Divider, Tooltip, Chip, CircularProgress, Snackbar, Alert, Menu, MenuItem,
-  useMediaQuery, useTheme, Dialog, DialogContent
+  useMediaQuery, useTheme, Dialog, DialogContent, Rating
 } from "@mui/material";
 import {
   MagnifyingGlass, Phone, VideoCamera, Info, PaperPlaneRight, CaretLeft,
@@ -17,6 +17,206 @@ import { useSocket } from "../../contexts/SocketContext";
 import { useNavigate, useOutletContext } from "react-router-dom";
 
 import { API_BASE, BASE_URL } from "../../constants";
+
+const renderMessageTextWithLinks = (text) => {
+  if (!text) return "";
+  const urlRegex = /(https?:\/\/[^\s]+)/gi;
+  const parts = text.split(urlRegex);
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: '#2196F3',
+            textDecoration: 'underline',
+            wordBreak: 'break-all',
+            fontWeight: 600
+          }}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+};
+
+const FeedbackFormBubble = ({ welcomeText, authFetch }) => {
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [rating, setRating] = useState(5);
+  const [workingWell, setWorkingWell] = useState("");
+  const [needsChange, setNeedsChange] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const checkStatus = async () => {
+      try {
+        const res = await authFetch(`${API_BASE}/feedback/status`);
+        const data = await res.json();
+        if (active) {
+          setHasSubmitted(data.hasSubmitted);
+        }
+      } catch (err) {
+        console.error("Error checking feedback status:", err);
+      } finally {
+        if (active) {
+          setCheckingStatus(false);
+        }
+      }
+    };
+    checkStatus();
+    return () => { active = false; };
+  }, [authFetch]);
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const res = await authFetch(`${API_BASE}/feedback/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating, working_well: workingWell, needs_change: needsChange })
+      });
+      if (res.ok) {
+        setHasSubmitted(true);
+      }
+    } catch (err) {
+      console.error("Error submitting feedback:", err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (checkingStatus) {
+    return (
+      <Stack spacing={1} sx={{ p: 1, alignItems: "center" }}>
+        <Typography variant="body2">{welcomeText}</Typography>
+        <CircularProgress size={20} />
+      </Stack>
+    );
+  }
+
+  return (
+    <Stack spacing={2} sx={{ width: "100%", maxWidth: 320, p: 0.5 }}>
+      <Typography variant="body2" sx={{ fontWeight: 500, lineHeight: 1.5 }}>
+        {welcomeText}
+      </Typography>
+      
+      <Divider sx={{ my: 1, borderColor: "rgba(255,255,255,0.15)" }} />
+
+      {hasSubmitted ? (
+        <Box sx={{ 
+          textAlign: "center", 
+          py: 2, 
+          px: 1,
+          borderRadius: 2, 
+          bgcolor: "rgba(76, 175, 80, 0.1)", 
+          border: "1px dashed rgba(76, 175, 80, 0.4)" 
+        }}>
+          <Typography variant="subtitle2" color="#4CAF50" fontWeight={700} sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+            🎉 Feedback Submitted!
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+            Thank you for helping us make PingMe better!
+          </Typography>
+        </Box>
+      ) : (
+        <Stack spacing={2.5}>
+          <Box sx={{ 
+            p: 1.5, 
+            borderRadius: 2, 
+            bgcolor: "rgba(0,0,0,0.05)", 
+            border: "1px solid rgba(0,0,0,0.08)" 
+          }}>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary", display: "block", mb: 0.5 }}>
+              RATE YOUR EXPERIENCE
+            </Typography>
+            <Rating 
+              name="feedback-rating" 
+              value={rating} 
+              onChange={(event, newValue) => setRating(newValue)} 
+              size="medium"
+            />
+          </Box>
+
+          <Stack spacing={1.5}>
+            <Box>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary", display: "block", mb: 0.5 }}>
+                WHAT IS WORKING WELL?
+              </Typography>
+              <InputBase
+                multiline
+                rows={2}
+                placeholder="Type here..."
+                value={workingWell}
+                onChange={(e) => setWorkingWell(e.target.value)}
+                sx={{
+                  width: "100%",
+                  bgcolor: "rgba(0,0,0,0.05)",
+                  border: "1px solid rgba(0,0,0,0.1)",
+                  borderRadius: 1.5,
+                  p: "8px 12px",
+                  fontSize: 13,
+                  color: "text.primary"
+                }}
+              />
+            </Box>
+
+            <Box>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: "text.secondary", display: "block", mb: 0.5 }}>
+                WHAT NEEDS TO CHANGE / IMPROVE?
+              </Typography>
+              <InputBase
+                multiline
+                rows={2}
+                placeholder="Type here..."
+                value={needsChange}
+                onChange={(e) => setNeedsChange(e.target.value)}
+                sx={{
+                  width: "100%",
+                  bgcolor: "rgba(0,0,0,0.05)",
+                  border: "1px solid rgba(0,0,0,0.1)",
+                  borderRadius: 1.5,
+                  p: "8px 12px",
+                  fontSize: 13,
+                  color: "text.primary"
+                }}
+              />
+            </Box>
+          </Stack>
+
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            style={{
+              cursor: submitting ? "not-allowed" : "pointer",
+              padding: "10px 16px",
+              borderRadius: "8px",
+              border: "none",
+              backgroundColor: "#2196F3",
+              color: "#ffffff",
+              fontSize: "13px",
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              transition: "opacity 0.2s",
+              opacity: submitting ? 0.6 : 1
+            }}
+          >
+            {submitting ? "Submitting..." : "Submit Feedback"}
+          </button>
+        </Stack>
+      )}
+    </Stack>
+  );
+};
 
 const GeneralApp = () => {
   const { currentUser, authFetch, logout } = useAuth();
@@ -646,9 +846,10 @@ const GeneralApp = () => {
                 display: "flex",
                 flexDirection: "column",
                 gap: 1.5,
-                bgcolor: isDark ? "background.default" : "#e5ddd5",
-                backgroundImage: isDark ? "none" : "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')",
-                backgroundBlendMode: "overlay",
+                bgcolor: isDark ? "#0b141a" : "#e5ddd5",
+                backgroundImage: isDark
+                  ? "linear-gradient(rgba(11, 20, 26, 0.93), rgba(11, 20, 26, 0.93)), url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')"
+                  : "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')",
                 backgroundRepeat: "repeat",
                 position: "relative"
               }}>
@@ -658,126 +859,173 @@ const GeneralApp = () => {
                   <Box sx={{ textAlign: "center", mt: 8 }}>
                     <Typography variant="body2" color="text.secondary">No messages yet — say hi! 👋</Typography>
                   </Box>
-                ) : messages.map((msg) => {
-                  const isOwn = Number(msg.sender_id) === Number(currentUser?.id);
+                ) : (() => {
+                  let lastDateStr = null;
+                  return messages.map((msg) => {
+                    const isOwn = Number(msg.sender_id) === Number(currentUser?.id);
 
-                  // ── Call event bubble ────────────────────────────────────────────
-                  if (msg._isCallEvent) {
-                    const isAccepted = msg._callStatus === "accepted";
+                    // Day-wise grouping calculation
+                    const msgDate = new Date(msg.created_at || Date.now());
+                    const dateStr = msgDate.toDateString();
+                    const showDateSeparator = dateStr !== lastDateStr;
+                    lastDateStr = dateStr;
+
+                    const dateSeparatorText = (() => {
+                      const today = new Date();
+                      const yesterday = new Date();
+                      yesterday.setDate(today.getDate() - 1);
+                      if (dateStr === today.toDateString()) return "TODAY";
+                      if (dateStr === yesterday.toDateString()) return "YESTERDAY";
+                      return msgDate.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+                    })();
+
                     return (
-                      <Box key={msg.id} sx={{ display: "flex", justifyContent: "center", my: 0.5 }}>
-                        <Box sx={{
-                          display: "inline-flex", alignItems: "center", gap: 0.8,
-                          px: 2, py: 0.7, borderRadius: 99,
-                          bgcolor: isAccepted ? "rgba(76,175,80,0.08)" : "rgba(244,67,54,0.07)",
-                          border: "1px solid", borderColor: isAccepted ? "rgba(76,175,80,0.3)" : "rgba(244,67,54,0.25)",
-                        }}>
-                          {msg.sender_id === currentUser?.id
-                            ? <PhoneOutgoing size={13} color={isAccepted ? "#4CAF50" : "#f44336"} weight="bold" />
-                            : <PhoneIncoming size={13} color={isAccepted ? "#4CAF50" : "#f44336"} weight="bold" />
-                          }
-                          <Typography sx={{ fontSize: 12, color: isAccepted ? "#388E3C" : "#c62828", fontWeight: 500 }}>
-                            {msg.message}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    );
-                  }
+                      <React.Fragment key={msg.id}>
+                        {showDateSeparator && (
+                          <Box sx={{ display: "flex", justifyContent: "center", my: 2, width: "100%" }}>
+                            <Box sx={{
+                              bgcolor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+                              border: "1px solid",
+                              borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.08)",
+                              borderRadius: "12px",
+                              px: 2,
+                              py: 0.5,
+                              boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                              zIndex: 1,
+                            }}>
+                              <Typography sx={{ fontSize: 11, fontWeight: 700, color: "text.secondary", letterSpacing: 0.5 }}>
+                                {dateSeparatorText}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        )}
 
-                  return (
-                    <Box key={msg.id} sx={{ display: "flex", alignItems: "flex-end", justifyContent: isOwn ? "flex-end" : "flex-start", gap: 1 }}>
-                      {!isOwn && <Avatar src={msg.sender_avatar} sx={{ width: 28, height: 28 }} />}
-                      <Box>
-                        <Box sx={{
-                          bgcolor: msg._blocked ? (isDark ? "error.dark" : "#ffcdd2") : (isOwn ? (isDark ? "#2c6c44" : "#E3F2FD") : (isDark ? "background.paper" : "#F5F5F5")),
-                          color: msg._blocked ? (isDark ? "#fff" : "#b71c1c") : (isOwn ? "text.primary" : "text.primary"),
-                          p: "10px 14px",
-                          borderRadius: isOwn ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                          border: "1px solid",
-                          borderColor: msg._blocked ? "error.main" : (isOwn ? (isDark ? "#388E3C" : "#90CAF9") : "divider"),
-                          maxWidth: { xs: "280px", sm: "380px" },
-                          boxShadow: isOwn ? "0px 2px 4px rgba(33, 150, 243, 0.15)" : "0px 2px 4px rgba(0,0,0,0.06)",
-                        }}>
-                          {(() => {
-                            const messageText = String(msg.message || "").trim();
-                            const looksLikeLink = messageText.startsWith("http");
-                            const isUpload = messageText.includes("/uploads") || messageText.includes("\\uploads");
-                            const isImage = messageText.match(/\.(png|jpg|jpeg|gif|webp|bmp|svg)(\?.*)?$/i);
-                            const isVideo = messageText.match(/\.(webm|mp4|ogg)(\?.*)?$/i);
-
-                            if (looksLikeLink) {
-                              console.log(`[MessageRender] Link found: "${messageText}" | isUpload: ${isUpload} | isImage: ${!!isImage}`);
-                            }
-
-                            // 1. Video Check
-                            if (isVideo && (isUpload || looksLikeLink)) {
-                              return (
-                                <Box sx={{ position: "relative", borderRadius: 1, overflow: "hidden", mb: 0.5 }}>
-                                  <video src={getFileUrl(messageText)} controls style={{ width: "100%", borderRadius: "8px", display: "block" }} />
+                        {/* ── Call event bubble ──────────────────────────────────────────── */}
+                        {msg._isCallEvent ? (
+                          (() => {
+                            const isAccepted = msg._callStatus === "accepted";
+                            return (
+                              <Box sx={{ display: "flex", justifyContent: "center", my: 0.5 }}>
+                                <Box sx={{
+                                  display: "inline-flex", alignItems: "center", gap: 0.8,
+                                  px: 2, py: 0.7, borderRadius: 99,
+                                  bgcolor: isAccepted ? "rgba(76,175,80,0.08)" : "rgba(244,67,54,0.07)",
+                                  border: "1px solid", borderColor: isAccepted ? "rgba(76,175,80,0.3)" : "rgba(244,67,54,0.25)",
+                                }}>
+                                  {msg.sender_id === currentUser?.id
+                                    ? <PhoneOutgoing size={13} color={isAccepted ? "#4CAF50" : "#f44336"} weight="bold" />
+                                    : <PhoneIncoming size={13} color={isAccepted ? "#4CAF50" : "#f44336"} weight="bold" />
+                                  }
+                                  <Typography sx={{ fontSize: 12, color: isAccepted ? "#388E3C" : "#c62828", fontWeight: 500 }}>
+                                    {msg.message}
+                                  </Typography>
                                 </Box>
-                              );
-                            }
+                              </Box>
+                            );
+                          })()
+                        ) : (
+                          <Box sx={{ display: "flex", alignItems: "flex-end", justifyContent: isOwn ? "flex-end" : "flex-start", gap: 1 }}>
+                            {!isOwn && <Avatar src={msg.sender_avatar} sx={{ width: 28, height: 28 }} />}
+                            <Box>
+                              <Box sx={{
+                                bgcolor: msg._blocked ? (isDark ? "error.dark" : "#ffcdd2") : (isOwn ? (isDark ? "#2c6c44" : "#E3F2FD") : (isDark ? "background.paper" : "#F5F5F5")),
+                                color: msg._blocked ? (isDark ? "#fff" : "#b71c1c") : (isOwn ? "text.primary" : "text.primary"),
+                                p: "10px 14px",
+                                borderRadius: isOwn ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                                border: "1px solid",
+                                borderColor: msg._blocked ? "error.main" : (isOwn ? (isDark ? "#388E3C" : "#90CAF9") : "divider"),
+                                maxWidth: { xs: "280px", sm: "380px" },
+                                boxShadow: isOwn ? "0px 2px 4px rgba(33, 150, 243, 0.15)" : "0px 2px 4px rgba(0,0,0,0.06)",
+                              }}>
+                                {(() => {
+                                  const messageText = String(msg.message || "").trim();
+                                  const looksLikeLink = messageText.startsWith("http");
+                                  const isUpload = messageText.includes("/uploads") || messageText.includes("\\uploads");
+                                  const isImage = messageText.match(/\.(png|jpg|jpeg|gif|webp|bmp|svg)(\?.*)?$/i);
+                                  const isVideo = messageText.match(/\.(webm|mp4|ogg)(\?.*)?$/i);
 
-                            // 2. Image Check
-                            if (isImage && (isUpload || looksLikeLink)) {
-                              return (
-                                <Box
-                                  component="img"
-                                  src={getFileUrl(messageText)}
-                                  alt="attachment"
-                                  sx={{
-                                    width: "100%",
-                                    maxHeight: 300,
-                                    borderRadius: 1,
-                                    display: "block",
-                                    objectFit: "cover",
-                                    cursor: "pointer",
-                                    bgcolor: "background.default"
-                                  }}
-                                  onClick={() => window.open(getFileUrl(messageText), "_blank")}
-                                  onError={(e) => {
-                                    console.error("[ImageRender] Failed to load:", getFileUrl(messageText));
-                                    e.target.style.display = 'none';
-                                  }}
-                                />
-                              );
-                            }
+                                  // 1. Video Check
+                                  if (isVideo && (isUpload || looksLikeLink)) {
+                                    return (
+                                      <Box sx={{ position: "relative", borderRadius: 1, overflow: "hidden", mb: 0.5 }}>
+                                        <video src={getFileUrl(messageText)} controls style={{ width: "100%", borderRadius: "8px", display: "block" }} />
+                                      </Box>
+                                    );
+                                  }
 
-                            // 3. Other Uploads (Docs, etc)
-                            if (isUpload) {
-                              const fileName = messageText.split(/[/\\]/).pop().split("-").slice(2).join("-") || "File Attachment";
-                              return (
-                                <Stack direction="row" spacing={2} alignItems="center" sx={{ bgcolor: isOwn ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)", p: 1, borderRadius: 1 }}>
-                                  <FileText size={32} weight="duotone" />
-                                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                                    <Typography variant="caption" noWrap sx={{ display: "block", fontWeight: 600, color: "inherit" }}>{fileName}</Typography>
-                                  </Box>
-                                  <IconButton size="small" component="a" href={getFileUrl(messageText)} download target="_blank" sx={{ color: "inherit" }}>
-                                    <DownloadSimple size={20} />
-                                  </IconButton>
-                                </Stack>
-                              );
-                            }
+                                  // 2. Image Check
+                                  if (isImage && (isUpload || looksLikeLink)) {
+                                    return (
+                                      <Box
+                                        component="img"
+                                        src={getFileUrl(messageText)}
+                                        alt="attachment"
+                                        sx={{
+                                          width: "100%",
+                                          maxHeight: 300,
+                                          borderRadius: 1,
+                                          display: "block",
+                                          objectFit: "cover",
+                                          cursor: "pointer",
+                                          bgcolor: "background.default"
+                                        }}
+                                        onClick={() => window.open(getFileUrl(messageText), "_blank")}
+                                        onError={(e) => {
+                                          console.error("[ImageRender] Failed to load:", getFileUrl(messageText));
+                                          e.target.style.display = 'none';
+                                        }}
+                                      />
+                                    );
+                                  }
 
-                            // 4. Regular Text
-                            return <Typography sx={{ fontSize: 14, lineHeight: 1.5, wordBreak: "break-word" }}>{msg.message}</Typography>;
-                          })()}
-                        </Box>
-                        <Stack direction="row" spacing={0.5} alignItems="center" justifyContent={isOwn ? "flex-end" : "flex-start"} sx={{ mt: 0.3, px: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary">{formatTime(msg.created_at)}</Typography>
-                          {isOwn && !msg._isCallEvent && (
-                            Number(msg.is_read) === 1 ? (
-                              <Checks size={14} weight="bold" color="#2196F3" />
-                            ) : (
-                              <Check size={14} weight="bold" color="text.disabled" />
-                            )
-                          )}
-                        </Stack>
-                      </Box>
-                      {isOwn && <Avatar src={currentUser?.avatar} sx={{ width: 28, height: 28 }} />}
-                    </Box>
-                  );
-                })}
+                                  // 3. Other Uploads (Docs, etc)
+                                  if (isUpload) {
+                                    const fileName = messageText.split(/[/\\]/).pop().split("-").slice(2).join("-") || "File Attachment";
+                                    return (
+                                      <Stack direction="row" spacing={2} alignItems="center" sx={{ bgcolor: isOwn ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)", p: 1, borderRadius: 1 }}>
+                                        <FileText size={32} weight="duotone" />
+                                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                                          <Typography variant="caption" noWrap sx={{ display: "block", fontWeight: 600, color: "inherit" }}>{fileName}</Typography>
+                                        </Box>
+                                        <IconButton size="small" component="a" href={getFileUrl(messageText)} download target="_blank" sx={{ color: "inherit" }}>
+                                          <DownloadSimple size={20} />
+                                        </IconButton>
+                                      </Stack>
+                                    );
+                                  }
+
+                                  // 4. Feedback Form Check
+                                  if (messageText.includes("[FEEDBACK_FORM]")) {
+                                    const cleanWelcome = msg.message.replace("[FEEDBACK_FORM]", "").trim();
+                                    return <FeedbackFormBubble welcomeText={cleanWelcome} authFetch={authFetch} />;
+                                  }
+
+                                  // 5. Regular Text (with clickable links parsed)
+                                  return (
+                                    <Typography sx={{ fontSize: 14, lineHeight: 1.5, wordBreak: "break-word" }}>
+                                      {renderMessageTextWithLinks(msg.message)}
+                                    </Typography>
+                                  );
+                                })()}
+                              </Box>
+                              <Stack direction="row" spacing={0.5} alignItems="center" justifyContent={isOwn ? "flex-end" : "flex-start"} sx={{ mt: 0.3, px: 0.5 }}>
+                                <Typography variant="caption" color="text.secondary">{formatTime(msg.created_at)}</Typography>
+                                {isOwn && !msg._isCallEvent && (
+                                  Number(msg.is_read) === 1 ? (
+                                    <Checks size={14} weight="bold" color="#2196F3" />
+                                  ) : (
+                                    <Check size={14} weight="bold" color="text.disabled" />
+                                  )
+                                )}
+                              </Stack>
+                            </Box>
+                            {isOwn && <Avatar src={currentUser?.avatar} sx={{ width: 28, height: 28 }} />}
+                          </Box>
+                        )}
+                      </React.Fragment>
+                    );
+                  });
+                })()}
                 <div ref={messagesEndRef} />
               </Box>
 

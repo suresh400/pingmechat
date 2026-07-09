@@ -10,7 +10,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { RtcTokenBuilder, RtcRole } = require("agora-token");
-const { sendOTPEmail } = require("./config/mailer");
+const { sendOTPEmail, sendFeedbackEmail, sendVerificationEmail } = require("./config/mailer");
 const {
     validateRegister,
     validateLogin,
@@ -519,14 +519,83 @@ app.get("/api/auth/users-count", async (req, res) => {
     }
 });
 
+// Submit application feedback
+app.post("/api/feedback/submit", verifyToken, async (req, res) => {
+    const { rating, working_well, needs_change } = req.body;
+    if (!rating) {
+        return res.status(400).json({ message: "Rating is required." });
+    }
+    try {
+        // 1. Save feedback to database
+        await db.query(
+            "INSERT INTO feedback (user_id, rating, working_well, needs_change) VALUES (?, ?, ?, ?)",
+            [req.user.id, Number(rating), working_well || "", needs_change || ""]
+        );
+
+        // 2. Fetch submitting user details
+        const [users] = await db.query("SELECT username, email, avatar FROM users WHERE id = ?", [req.user.id]);
+        const user = users[0] || { username: "User", email: "unknown@example.com", avatar: "" };
+
+        // 3. Find Admin ID
+        let adminId = 1;
+        const [admins] = await db.query("SELECT id FROM users WHERE username = ?", ["Admin"]);
+        if (admins.length > 0) {
+            adminId = admins[0].id;
+        }
+
+        // 4. Send email notification to Admin/Support Email
+        sendFeedbackEmail(user.email, user.username, Number(rating), working_well, needs_change)
+            .catch(mailErr => console.error("Error sending feedback email:", mailErr));
+
+        // 5. Send message from user back to Admin in chat thread
+        const starsText = "★".repeat(Number(rating)) + "☆".repeat(5 - Number(rating));
+        const feedbackMessageText = `📝 FEEDBACK SUBMISSION:\n• Rating: ${starsText} (${rating}/5)\n• Working Well: ${working_well || "N/A"}\n• Needs Change: ${needs_change || "N/A"}`;
+
+        const [msgResult] = await db.query(
+            "INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
+            [req.user.id, adminId, feedbackMessageText]
+        );
+
+        // 6. Notify both users via Socket.io
+        const payload = {
+            id: msgResult.insertId,
+            sender_id: Number(req.user.id),
+            receiver_id: Number(adminId),
+            message: feedbackMessageText,
+            sender_name: user.username,
+            sender_avatar: user.avatar,
+            created_at: new Date().toISOString()
+        };
+        io.to(`user_${adminId}`).emit("receive_message", payload);
+        io.to(`user_${req.user.id}`).emit("receive_message", payload);
+
+        res.status(201).json({ message: "Feedback submitted successfully. Thank you!" });
+    } catch (err) {
+        console.error("Error submitting feedback:", err);
+        res.status(500).json({ message: "Server error saving feedback.", error: err.message });
+    }
+});
+
+// Check if current user has already submitted feedback
+app.get("/api/feedback/status", verifyToken, async (req, res) => {
+    try {
+        const [rows] = await db.query("SELECT id FROM feedback WHERE user_id = ?", [req.user.id]);
+        res.json({ hasSubmitted: rows.length > 0 });
+    } catch (err) {
+        res.status(500).json({ message: "Server error checking feedback status.", error: err.message });
+    }
+});
+
 // Register
 app.post("/api/auth/register", validateRegister, async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, email, password, otp } = req.body;
     if (!username || !email || !password)
         return res.status(400).json({ message: "All fields are required." });
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     try {
-        const [existingEmail] = await db.query("SELECT id FROM users WHERE email = ?", [email]);
+        const [existingEmail] = await db.query("SELECT id FROM users WHERE email = ?", [normalizedEmail]);
         if (existingEmail.length > 0)
             return res.status(409).json({ message: "Email already registered." });
 
@@ -534,19 +603,110 @@ app.post("/api/auth/register", validateRegister, async (req, res) => {
         if (existingUsername.length > 0)
             return res.status(409).json({ message: "Username already taken. Please choose another." });
 
+        if (!otp) {
+            // Step 1: Send registration verification OTP
+            await db.query("UPDATE password_reset_otps SET used = TRUE WHERE email = ? AND used = FALSE", [normalizedEmail]);
+
+            const newOtp = String(Math.floor(100000 + Math.random() * 900000));
+            const otpHash = await bcrypt.hash(newOtp, 10);
+            const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+            await db.query(
+                "INSERT INTO password_reset_otps (user_id, email, otp_hash, expires_at) VALUES (?, ?, ?, ?)",
+                [0, normalizedEmail, otpHash, expiresAt]
+            );
+
+            console.log(`[REGISTRATION OTP] Code for ${normalizedEmail}: ${newOtp}`);
+
+            if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+                try {
+                    await sendVerificationEmail(normalizedEmail, username, newOtp);
+                } catch (emailErr) {
+                    console.error("Failed to send verification email via SMTP:", emailErr);
+                    // We don't fail registration if in local environment without internet, but here we can return error or fallback
+                    return res.status(500).json({ message: "Failed to send verification email. Please try again." });
+                }
+            }
+
+            return res.status(200).json({ otpRequired: true, message: "A verification OTP has been sent to your email. Please enter it to complete registration." });
+        }
+
+        // Step 2: Verify registration OTP
+        const [otpRecords] = await db.query(
+            `SELECT * FROM password_reset_otps 
+             WHERE email = ? AND used = FALSE 
+             ORDER BY created_at DESC LIMIT 1`,
+            [normalizedEmail]
+        );
+
+        if (otpRecords.length === 0) {
+            return res.status(400).json({ message: "No active verification code found. Please request registration again." });
+        }
+
+        const record = otpRecords[0];
+
+        if (new Date() > new Date(record.expires_at)) {
+            await db.query("UPDATE password_reset_otps SET used = TRUE WHERE id = ?", [record.id]);
+            return res.status(400).json({ message: "Verification OTP has expired. Please try again." });
+        }
+
+        const MAX_ATTEMPTS = 5;
+        if (record.attempts >= MAX_ATTEMPTS) {
+            await db.query("UPDATE password_reset_otps SET used = TRUE WHERE id = ?", [record.id]);
+            return res.status(429).json({ message: "Too many incorrect attempts. Please start registration again." });
+        }
+
+        const isMatch = await bcrypt.compare(otp, record.otp_hash);
+        if (!isMatch) {
+            await db.query("UPDATE password_reset_otps SET attempts = attempts + 1 WHERE id = ?", [record.id]);
+            const remaining = MAX_ATTEMPTS - record.attempts - 1;
+            return res.status(400).json({
+                message: `Incorrect verification code. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.`
+            });
+        }
+
+        // OTP matches - complete registration
+        await db.query("UPDATE password_reset_otps SET used = TRUE WHERE id = ?", [record.id]);
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`;
         const [result] = await db.query(
             "INSERT INTO users (username, email, password, avatar) VALUES (?, ?, ?, ?)",
-            [username, email, hashedPassword, avatarUrl]
+            [username, normalizedEmail, hashedPassword, avatarUrl]
         );
+
+        try {
+            let adminId = 1;
+            const [admins] = await db.query("SELECT id FROM users WHERE username = ?", ["Admin"]);
+            if (admins.length === 0) {
+                const adminAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=Admin`;
+                const adminPass = await bcrypt.hash("admin_secure_disabled_pass_" + Math.random(), 10);
+                const [adminResult] = await db.query(
+                    "INSERT INTO users (username, email, password, avatar) VALUES (?, ?, ?, ?)",
+                    ["Admin", "admin@pingme.chat", adminPass, adminAvatar]
+                );
+                adminId = adminResult.insertId;
+            } else {
+                adminId = admins[0].id;
+            }
+
+            const welcomeText = "Welcome to PingMe! We're thrilled to have you here. 👋 [FEEDBACK_FORM]";
+            await db.query(
+                "INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
+                [adminId, result.insertId, welcomeText]
+            );
+        } catch (adminErr) {
+            console.error("Error creating Admin welcome message:", adminErr);
+        }
+
         const token = jwt.sign(
-            { id: result.insertId, username, email, avatar: avatarUrl },
+            { id: result.insertId, username, email: normalizedEmail, avatar: avatarUrl },
             JWT_SECRET, { expiresIn: "7d" }
         );
-        res.status(201).json({ token, user: { id: result.insertId, username, email, avatar: avatarUrl } });
+        res.status(201).json({ token, user: { id: result.insertId, username, email: normalizedEmail, avatar: avatarUrl } });
     } catch (err) {
-        res.status(500).json({ message: "Server error.", error: err.message });
+        console.error("Error during registration:", err);
+        res.status(500).json({ message: "Server error during registration.", error: err.message });
     }
 });
 

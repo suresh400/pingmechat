@@ -496,9 +496,10 @@ const GroupsPage = () => {
                         <Stack direction="row" sx={{ flexGrow: 1, overflow: "hidden" }}>
                             <Box sx={{
                                 flexGrow: 1, height: "100%", overflowY: "auto", p: 3, display: "flex", flexDirection: "column", gap: 1.5,
-                                bgcolor: isDark ? "background.default" : "#e5ddd5",
-                                backgroundImage: isDark ? "none" : "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')",
-                                backgroundBlendMode: "overlay",
+                                bgcolor: isDark ? "#0b141a" : "#e5ddd5",
+                                backgroundImage: isDark
+                                  ? "linear-gradient(rgba(11, 20, 26, 0.93), rgba(11, 20, 26, 0.93)), url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')"
+                                  : "url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')",
                                 backgroundRepeat: "repeat",
                             }}>
                                 {messages.map((msg) => {
