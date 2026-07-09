@@ -38,6 +38,7 @@ export default function WhiteboardDialog({ open, onClose, socket, chatId, isGrou
     }, 100);
 
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Handle color or size change
@@ -69,6 +70,7 @@ export default function WhiteboardDialog({ open, onClose, socket, chatId, isGrou
       socket.off("whiteboard_draw", handleDraw);
       socket.off("whiteboard_clear", handleClear);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, open, currentUser.id]);
 
   const drawOnCanvas = (x0, y0, x1, y1, strokeColor, strokeSize, emit = true) => {
