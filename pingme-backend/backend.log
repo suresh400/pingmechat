@@ -228,3 +228,5 @@ PingMe server running on port 5000
 [HTTP] GET /api/contacts/blocked - body: undefined
 [HTTP] GET /api/contacts/blocked - body: undefined
 [HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/contacts/active - body: undefined
+[HTTP] GET /api/contacts/blocked - body: undefined

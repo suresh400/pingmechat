@@ -4,12 +4,12 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions, TextField,
     Chip, CircularProgress, Divider, Snackbar, Alert, Tooltip, useMediaQuery, useTheme, Menu, MenuItem
 } from "@mui/material";
-import { MagnifyingGlass, Plus, PaperPlaneRight, Smiley, Users, X, Paperclip, Gear, VideoCamera, CaretLeft, Info, Phone, Hourglass, Palette, ListChecks } from "phosphor-react";
+import { MagnifyingGlass, Plus, PaperPlaneRight, Smiley, Users, X, Paperclip, VideoCamera, CaretLeft, Info, Phone, Hourglass, Palette, ListChecks } from "phosphor-react";
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
 import useSettings from "../../hooks/useSettings";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSocket } from "../../contexts/SocketContext";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import SelfDestructCountdown from "../../components/SelfDestructCountdown";
 import WhiteboardDialog from "../../components/WhiteboardDialog";
 import ConvertToTaskDialog from "../../components/ConvertToTaskDialog";
@@ -71,7 +71,6 @@ const GroupsPage = () => {
     const [addResults, setAddResults] = useState([]);
 
     const fileInputRef = useRef(null);
-    const navigate = useNavigate();
     const { setCallState } = useOutletContext();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down("md"));

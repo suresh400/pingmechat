@@ -6,7 +6,7 @@ import {
 } from "@mui/material";
 import {
   MagnifyingGlass, Phone, VideoCamera, Info, PaperPlaneRight, CaretLeft,
-  Paperclip, Smiley, Prohibit, Trash, SignOut, X, Gear,
+  Paperclip, Smiley, Prohibit, Trash, SignOut, X,
   PhoneIncoming, PhoneOutgoing, DotsThreeVertical, DownloadSimple, FileText, Check, Checks,
   EnvelopeSimple, User, Hourglass, Palette, ListChecks,
 } from "phosphor-react";
