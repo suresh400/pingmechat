@@ -1,21 +1,33 @@
 const nodemailer = require("nodemailer");
+const dns = require("dns").promises;
 
-const getTransporter = () => {
+const getTransporter = async () => {
     const host = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
     // Default to port 465 (SSL) for reliable cloud deployment (e.g. Render)
     const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465;
     const secure = port === 465;
+
+    let resolvedHost = host;
+    try {
+        // Force IPv4 DNS lookup to prevent ENETUNREACH IPv6 errors in cloud environments like Render
+        const result = await dns.lookup(host, { family: 4 });
+        resolvedHost = result.address;
+        console.log(`[Mailer] Resolved ${host} to IPv4 address: ${resolvedHost}`);
+    } catch (dnsErr) {
+        console.warn(`[Mailer] DNS lookup failed for ${host}, using hostname directly:`, dnsErr.message);
+    }
+
     return nodemailer.createTransport({
-        host,
+        host: resolvedHost,
         port,
         secure,
-        family: 4, // Force IPv4 to prevent ENETUNREACH errors on cloud systems like Render
         auth: {
             user: (process.env.SMTP_USER || "").trim(),
             pass: (process.env.SMTP_PASS || "").trim(),
         },
         tls: {
             rejectUnauthorized: false,
+            servername: host, // Must specify original hostname for certificate validation
         },
     });
 };
@@ -110,7 +122,7 @@ const sendOTPEmail = async (to, username, otp) => {
 
     console.log(`[Mailer] Sending OTP email to: ${to} (from: ${(process.env.SMTP_USER || "").trim()})`);
     
-    const transporter = getTransporter();
+    const transporter = await getTransporter();
     const info = await transporter.sendMail({
         from: `"PingMe" <${(process.env.SMTP_USER || "").trim()}>`,
         to,
@@ -184,7 +196,7 @@ const sendFeedbackEmail = async (userEmail, username, rating, workingWell, needs
     console.log(`[Mailer] Sending Feedback email to supportpingmechat@gmail.com`);
     
     try {
-        const transporter = getTransporter();
+        const transporter = await getTransporter();
         const info = await transporter.sendMail({
             from: `"PingMe Feedback" <${(process.env.SMTP_USER || "").trim()}>`,
             to: "supportpingmechat@gmail.com",
@@ -274,7 +286,7 @@ const sendVerificationEmail = async (to, username, otp) => {
     console.log(`[Mailer] Sending verification email to: ${to}`);
     
     try {
-        const transporter = getTransporter();
+        const transporter = await getTransporter();
         const info = await transporter.sendMail({
             from: `"PingMe" <${(process.env.SMTP_USER || "").trim()}>`,
             to,

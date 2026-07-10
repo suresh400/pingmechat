@@ -824,17 +824,28 @@ app.get("/api/auth/test-smtp", async (req, res) => {
 
     try {
         console.log(`[Diagnostic] Testing SMTP connection to ${host}:${port} using user ${user}...`);
+        
+        const dns = require("dns").promises;
+        let resolvedHost = host;
+        try {
+            const result = await dns.lookup(host, { family: 4 });
+            resolvedHost = result.address;
+            console.log(`[Diagnostic] Resolved ${host} to IPv4: ${resolvedHost}`);
+        } catch (dnsErr) {
+            console.warn(`[Diagnostic] DNS lookup failed for ${host}:`, dnsErr.message);
+        }
+
         const transporter = nodemailer.createTransport({
-            host: host.trim(),
+            host: resolvedHost,
             port,
             secure: port === 465,
-            family: 4, // Force IPv4
             auth: {
                 user: user.trim(),
                 pass: pass.trim(),
             },
             tls: {
                 rejectUnauthorized: false,
+                servername: host,
             },
         });
 
