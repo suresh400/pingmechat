@@ -1,12 +1,12 @@
 const nodemailer = require("nodemailer");
 
-// Always create a fresh transporter reading from current env vars
-// Do NOT cache it — env vars must always be fresh at send time
 const getTransporter = () => {
-    const port = Number(process.env.SMTP_PORT) || 587;
-    const secure = port === 465; // true for 465, false for other ports like 587
+    const host = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
+    // Default to port 465 (SSL) for reliable cloud deployment (e.g. Render)
+    const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465;
+    const secure = port === 465;
     return nodemailer.createTransport({
-        host: (process.env.SMTP_HOST || "smtp.gmail.com").trim(),
+        host,
         port,
         secure,
         auth: {
