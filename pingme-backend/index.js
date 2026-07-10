@@ -807,6 +807,77 @@ app.get("/api/feedback/status", verifyToken, async (req, res) => {
     }
 });
 
+// Test SMTP configuration
+app.get("/api/auth/test-smtp", async (req, res) => {
+    const nodemailer = require("nodemailer");
+    const host = process.env.SMTP_HOST || "smtp.gmail.com";
+    const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 465;
+    const user = process.env.SMTP_USER || "";
+    const pass = process.env.SMTP_PASS || "";
+
+    if (!user || !pass) {
+        return res.status(400).json({
+            success: false,
+            message: "SMTP credentials (SMTP_USER and/or SMTP_PASS) are not set in the environment variables."
+        });
+    }
+
+    try {
+        console.log(`[Diagnostic] Testing SMTP connection to ${host}:${port} using user ${user}...`);
+        const transporter = nodemailer.createTransport({
+            host: host.trim(),
+            port,
+            secure: port === 465,
+            auth: {
+                user: user.trim(),
+                pass: pass.trim(),
+            },
+            tls: {
+                rejectUnauthorized: false,
+            },
+        });
+
+        // Verify transporter connection configuration
+        await transporter.verify();
+
+        // Send a test email to the sender themselves
+        const info = await transporter.sendMail({
+            from: `"PingMe Diagnostics" <${user.trim()}>`,
+            to: user.trim(),
+            subject: "PingMe SMTP Diagnostics Success",
+            text: `SMTP diagnostics verified successfully on host: ${host}, port: ${port}, secure: ${port === 465}.`,
+        });
+
+        res.json({
+            success: true,
+            message: `SMTP is configured and verified successfully! Test email sent.`,
+            details: {
+                host,
+                port,
+                secure: port === 465,
+                user,
+                messageId: info.messageId,
+                accepted: info.accepted
+            }
+        });
+    } catch (err) {
+        console.error("[Diagnostic] SMTP verification failed:", err.message);
+        res.status(500).json({
+            success: false,
+            message: `SMTP verification failed: ${err.message}`,
+            details: {
+                host,
+                port,
+                secure: port === 465,
+                user,
+                errorName: err.name,
+                errorCode: err.code,
+                errorStack: err.stack
+            }
+        });
+    }
+});
+
 // Register
 app.post("/api/auth/register", validateRegister, async (req, res) => {
     const { username, email, password, otp } = req.body;
