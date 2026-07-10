@@ -837,52 +837,7 @@ app.get("/api/auth/test-smtp", async (req, res) => {
     const user = process.env.SMTP_USER || "";
     const pass = process.env.SMTP_PASS || "";
 
-    // 1. Test Brevo HTTP API
-    if (process.env.BREVO_API_KEY) {
-        try {
-            console.log(`[Diagnostic] Testing Brevo HTTP API...`);
-            const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "api-key": process.env.BREVO_API_KEY.trim()
-                },
-                body: JSON.stringify({
-                    sender: { name: "PingMe Diagnostics", email: user || "supportpingmechat@gmail.com" },
-                    to: [{ email: user || "supportpingmechat@gmail.com" }],
-                    subject: "PingMe Brevo API Diagnostics Success",
-                    htmlContent: "Brevo API diagnostics verified successfully."
-                })
-            });
-
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`Brevo API returned status ${response.status}: ${errText}`);
-            }
-
-            const data = await response.json();
-            return res.json({
-                success: true,
-                message: "Brevo HTTP API is configured and verified successfully! Test email sent.",
-                details: {
-                    provider: "Brevo",
-                    messageId: data.messageId
-                }
-            });
-        } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: `Brevo API verification failed: ${err.message}`,
-                details: {
-                    provider: "Brevo",
-                    errorName: err.name,
-                    errorStack: err.stack
-                }
-            });
-        }
-    }
-
-    // 2. Test Resend HTTP API
+    // 1. Test Resend HTTP API
     if (process.env.RESEND_API_KEY) {
         try {
             console.log(`[Diagnostic] Testing Resend HTTP API...`);
@@ -975,7 +930,7 @@ app.get("/api/auth/test-smtp", async (req, res) => {
     if (!user || !pass) {
         return res.status(400).json({
             success: false,
-            message: "No email providers configured. Please set BREVO_API_KEY, RESEND_API_KEY, AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, or SMTP credentials (SMTP_USER and SMTP_PASS) in the environment variables."
+            message: "No email providers configured. Please set RESEND_API_KEY, AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, or SMTP credentials (SMTP_USER and SMTP_PASS) in the environment variables."
         });
     }
 
@@ -1081,7 +1036,7 @@ app.post("/api/auth/register", validateRegister, async (req, res) => {
             console.log(`[REGISTRATION OTP] Code for ${normalizedEmail}: ${newOtp}`);
 
             let message = "A verification OTP has been sent to your email. Please enter it to complete registration.";
-            if (process.env.SMTP_USER || process.env.BREVO_API_KEY || process.env.RESEND_API_KEY || process.env.AWS_ACCESS_KEY_ID) {
+            if (process.env.SMTP_USER || process.env.RESEND_API_KEY || process.env.AWS_ACCESS_KEY_ID) {
                 // Send email asynchronously in the background so the request is fast and lag-free
                 sendVerificationEmail(normalizedEmail, username, newOtp).catch((emailErr) => {
                     console.error("Failed to send verification email asynchronously:", emailErr.message);
@@ -1253,7 +1208,7 @@ app.post("/api/auth/forgot-password", validateForgotPassword, async (req, res) =
         console.log(`[FORGOT PASSWORD OTP] Code for ${normalizedEmail}: ${otp}`);
 
         let message = "If this email is registered, an OTP has been sent.";
-        if (process.env.SMTP_USER || process.env.BREVO_API_KEY || process.env.RESEND_API_KEY || process.env.AWS_ACCESS_KEY_ID) {
+        if (process.env.SMTP_USER || process.env.RESEND_API_KEY || process.env.AWS_ACCESS_KEY_ID) {
             sendOTPEmail(normalizedEmail, user.username, otp)
                 .then(() => console.log(`[forgot-password] ✅ OTP email sent successfully to ${normalizedEmail}`))
                 .catch((emailErr) => console.error(`[forgot-password] ❌ Failed to send email to ${normalizedEmail}:`, emailErr.message));
@@ -1355,7 +1310,7 @@ app.post("/api/auth/resend-otp", validateResendOtp, async (req, res) => {
         console.log(`[RESEND OTP] Code for ${normalizedEmail}: ${otp}`);
 
         let message = "A new OTP has been sent to your email.";
-        if (process.env.SMTP_USER || process.env.BREVO_API_KEY || process.env.RESEND_API_KEY || process.env.AWS_ACCESS_KEY_ID) {
+        if (process.env.SMTP_USER || process.env.RESEND_API_KEY || process.env.AWS_ACCESS_KEY_ID) {
             sendOTPEmail(normalizedEmail, user.username, otp)
                 .then(() => console.log(`[resend-otp] ✅ OTP email sent successfully to ${normalizedEmail}`))
                 .catch((emailErr) => console.error(`[resend-otp] ❌ Failed to send email to ${normalizedEmail}:`, emailErr.message));
