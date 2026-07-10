@@ -18,6 +18,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import SelfDestructCountdown from "../../components/SelfDestructCountdown";
 import WhiteboardDialog from "../../components/WhiteboardDialog";
 import ConvertToTaskDialog from "../../components/ConvertToTaskDialog";
+import logoCustom from "../../assets/logo-custom.png";
 
 import { API_BASE, BASE_URL } from "../../constants";
 
@@ -678,8 +679,8 @@ const GeneralApp = () => {
                 </IconButton>
               </Tooltip>
             </Box>
-            <Box sx={{ display: "flex", alignItems: "center", bgcolor: "action.hover", borderRadius: 2, p: "6px 12px", gap: 1 }}>
-              <MagnifyingGlass size={18} />
+            <Box sx={{ display: "flex", alignItems: "center", bgcolor: "action.hover", borderRadius: 2, p: "6px 12px", gap: 1.2 }}>
+              <img src={logoCustom} alt="PingMe" style={{ width: 22, height: 22, borderRadius: "4px", objectFit: "contain" }} />
               <InputBase fullWidth placeholder="Search by username..." value={search} onChange={(e) => setSearch(e.target.value)} sx={{ fontSize: 14 }} />
               {search && <IconButton size="small" onClick={() => setSearch("")} sx={{ p: 0 }}><X size={14} /></IconButton>}
             </Box>

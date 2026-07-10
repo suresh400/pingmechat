@@ -5,6 +5,7 @@ import ScrollStack, { ScrollStackItem } from "../components/ScrollStack";
 import LightRays from "../components/LightRays";
 import AuthModal from "../components/AuthModal";
 import CardNav from "../components/CardNav";
+import logoCustom from "../assets/logo-custom.png";
 
 const DARK_BG = "#000000";
 const LIGHT_TEXT = "#FFFFFF";
@@ -353,7 +354,10 @@ export default function LandingPage() {
   ];
 
   const logoEl = (
-    <div style={styles.logo} onClick={() => scrollTo("hero")}>PingsMe</div>
+    <div style={{ ...styles.logo, display: "flex", alignItems: "center", gap: "8px" }} onClick={() => scrollTo("hero")}>
+      <img src={logoCustom} alt="PingsMe Logo" style={{ width: 28, height: 28, borderRadius: "6px", objectFit: "contain" }} />
+      <span>PingsMe</span>
+    </div>
   );
 
   return (
@@ -625,7 +629,10 @@ export default function LandingPage() {
 
       {/* ── FOOTER ── */}
       <footer style={styles.footer}>
-        <div style={{ ...styles.logo, fontSize: 20 }}>PingsMe</div>
+        <div style={{ ...styles.logo, fontSize: 20, display: "flex", alignItems: "center", gap: "8px" }}>
+          <img src={logoCustom} alt="PingsMe Logo" style={{ width: 24, height: 24, borderRadius: "5px", objectFit: "contain" }} />
+          <span>PingsMe</span>
+        </div>
         <div style={styles.footerLinks}>
           {[["Features", "features"], ["How it Works", "howitworks"], ["FAQ", "faq"], ["Contact", "contact"], ["Privacy", "legal"], ["Terms", "legal"]].map(([label, id]) => (
             <span key={label} style={{ color: "rgba(255,255,255,0.45)", fontSize: 14, cursor: "pointer", transition: "color 0.2s" }}

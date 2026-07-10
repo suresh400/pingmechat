@@ -840,12 +840,10 @@ app.post("/api/auth/register", validateRegister, async (req, res) => {
             console.log(`[REGISTRATION OTP] Code for ${normalizedEmail}: ${newOtp}`);
 
             if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-                try {
-                    await sendVerificationEmail(normalizedEmail, username, newOtp);
-                } catch (emailErr) {
-                    console.error("Failed to send verification email via SMTP:", emailErr);
-                    // Do not block registration in local/offline environments. Fallback to OTP logged in terminal.
-                }
+                // Send email asynchronously in the background so the request is fast and lag-free
+                sendVerificationEmail(normalizedEmail, username, newOtp).catch((emailErr) => {
+                    console.error("Failed to send verification email asynchronously via SMTP:", emailErr.message);
+                });
             }
 
             return res.status(200).json({ otpRequired: true, message: "A verification OTP has been sent to your email. Please enter it to complete registration." });
@@ -1008,16 +1006,13 @@ app.post("/api/auth/forgot-password", validateForgotPassword, async (req, res) =
         );
 
         // Send email — if SMTP not configured, log OTP to console (dev mode)
+        console.log(`[FORGOT PASSWORD OTP] Code for ${normalizedEmail}: ${otp}`);
+
+        // Send email asynchronously in the background so the request responds instantly without lag
         if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-            try {
-                await sendOTPEmail(normalizedEmail, user.username, otp);
-                console.log(`[forgot-password] ✅ OTP email sent to ${normalizedEmail}`);
-            } catch (emailErr) {
-                console.error(`[forgot-password] ❌ Failed to send email to ${normalizedEmail}:`, emailErr.message);
-                return res.status(500).json({ message: "Failed to send OTP email. Please try again later." });
-            }
-        } else {
-            console.log(`[DEV MODE] OTP for ${normalizedEmail}: ${otp}`);
+            sendOTPEmail(normalizedEmail, user.username, otp)
+                .then(() => console.log(`[forgot-password] ✅ OTP email sent successfully to ${normalizedEmail}`))
+                .catch((emailErr) => console.error(`[forgot-password] ❌ Failed to send email to ${normalizedEmail}:`, emailErr.message));
         }
 
         res.json({ message: "If this email is registered, an OTP has been sent." });
@@ -1111,10 +1106,12 @@ app.post("/api/auth/resend-otp", validateResendOtp, async (req, res) => {
             [user.id, normalizedEmail, otpHash, expiresAt]
         );
 
+        console.log(`[RESEND OTP] Code for ${normalizedEmail}: ${otp}`);
+
         if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-            await sendOTPEmail(normalizedEmail, user.username, otp);
-        } else {
-            console.log(`[DEV MODE] Resent OTP for ${normalizedEmail}: ${otp}`);
+            sendOTPEmail(normalizedEmail, user.username, otp)
+                .then(() => console.log(`[resend-otp] ✅ OTP email sent successfully to ${normalizedEmail}`))
+                .catch((emailErr) => console.error(`[resend-otp] ❌ Failed to send email to ${normalizedEmail}:`, emailErr.message));
         }
 
         res.json({ message: "A new OTP has been sent to your email." });
