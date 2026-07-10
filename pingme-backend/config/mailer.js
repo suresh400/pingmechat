@@ -9,6 +9,7 @@ const getTransporter = () => {
         host,
         port,
         secure,
+        family: 4, // Force IPv4 to prevent ENETUNREACH errors on cloud systems like Render
         auth: {
             user: (process.env.SMTP_USER || "").trim(),
             pass: (process.env.SMTP_PASS || "").trim(),

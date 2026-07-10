@@ -828,6 +828,7 @@ app.get("/api/auth/test-smtp", async (req, res) => {
             host: host.trim(),
             port,
             secure: port === 465,
+            family: 4, // Force IPv4
             auth: {
                 user: user.trim(),
                 pass: pass.trim(),
