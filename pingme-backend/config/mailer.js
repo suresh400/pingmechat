@@ -32,6 +32,75 @@ const getTransporter = async () => {
     });
 };
 
+const sendMailCustom = async ({ to, subject, html }) => {
+    // 1. Try Brevo HTTP API
+    if (process.env.BREVO_API_KEY) {
+        console.log(`[Mailer] Sending email to ${to} via Brevo HTTP API (Port 443)...`);
+        const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "api-key": process.env.BREVO_API_KEY.trim()
+            },
+            body: JSON.stringify({
+                sender: { name: "PingMe", email: (process.env.SMTP_USER || "supportpingmechat@gmail.com").trim() },
+                to: [{ email: to }],
+                subject: subject,
+                htmlContent: html
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Brevo API returned status ${response.status}: ${errText}`);
+        }
+
+        const data = await response.json();
+        console.log(`[Mailer] ✅ Email sent via Brevo HTTP API! MessageId: ${data.messageId || "N/A"}`);
+        return { messageId: data.messageId };
+    }
+
+    // 2. Try Resend HTTP API
+    if (process.env.RESEND_API_KEY) {
+        console.log(`[Mailer] Sending email to ${to} via Resend HTTP API (Port 443)...`);
+        const senderEmail = process.env.RESEND_SENDER_EMAIL || "onboarding@resend.dev";
+        const response = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${process.env.RESEND_API_KEY.trim()}`
+            },
+            body: JSON.stringify({
+                from: `PingMe <${senderEmail.trim()}>`,
+                to: [to],
+                subject: subject,
+                html: html
+            })
+        });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Resend API returned status ${response.status}: ${errText}`);
+        }
+
+        const data = await response.json();
+        console.log(`[Mailer] ✅ Email sent via Resend HTTP API! MessageId: ${data.id || "N/A"}`);
+        return { messageId: data.id };
+    }
+
+    // 3. Fallback to standard SMTP (which will work locally, or on paid cloud servers)
+    console.log(`[Mailer] Sending email to ${to} via SMTP...`);
+    const transporter = await getTransporter();
+    const info = await transporter.sendMail({
+        from: `"PingMe" <${(process.env.SMTP_USER || "").trim()}>`,
+        to,
+        subject,
+        html,
+    });
+    console.log(`[Mailer] ✅ Email sent via SMTP! MessageId: ${info.messageId}`);
+    return info;
+};
+
 /**
  * Send OTP email with a professional HTML template.
  */
@@ -120,18 +189,12 @@ const sendOTPEmail = async (to, username, otp) => {
 </body>
 </html>`;
 
-    console.log(`[Mailer] Sending OTP email to: ${to} (from: ${(process.env.SMTP_USER || "").trim()})`);
-    
-    const transporter = await getTransporter();
-    const info = await transporter.sendMail({
-        from: `"PingMe" <${(process.env.SMTP_USER || "").trim()}>`,
+    console.log(`[Mailer] Preparing OTP email for: ${to}`);
+    return await sendMailCustom({
         to,
         subject: `${otp} is your PingMe password reset OTP`,
         html,
     });
-    
-    console.log(`[Mailer] ✅ Email sent successfully! MessageId: ${info.messageId}, Accepted: ${info.accepted}, Rejected: ${info.rejected}`);
-    return info;
 };
 
 const sendFeedbackEmail = async (userEmail, username, rating, workingWell, needsChange) => {
@@ -193,18 +256,13 @@ const sendFeedbackEmail = async (userEmail, username, rating, workingWell, needs
 </body>
 </html>`;
 
-    console.log(`[Mailer] Sending Feedback email to supportpingmechat@gmail.com`);
-    
+    console.log(`[Mailer] Preparing Feedback email to supportpingmechat@gmail.com`);
     try {
-        const transporter = await getTransporter();
-        const info = await transporter.sendMail({
-            from: `"PingMe Feedback" <${(process.env.SMTP_USER || "").trim()}>`,
+        return await sendMailCustom({
             to: "supportpingmechat@gmail.com",
             subject: `Feedback from ${username} - ${rating}/5 Stars`,
             html,
         });
-        console.log(`[Mailer] Feedback email sent: ${info.messageId}`);
-        return info;
     } catch (err) {
         console.error("[Mailer] Failed to send feedback email:", err.message);
     }
@@ -283,18 +341,13 @@ const sendVerificationEmail = async (to, username, otp) => {
 </body>
 </html>`;
 
-    console.log(`[Mailer] Sending verification email to: ${to}`);
-    
+    console.log(`[Mailer] Preparing verification email to: ${to}`);
     try {
-        const transporter = await getTransporter();
-        const info = await transporter.sendMail({
-            from: `"PingMe" <${(process.env.SMTP_USER || "").trim()}>`,
+        return await sendMailCustom({
             to,
             subject: `${otp} is your PingMe verification code`,
             html,
         });
-        console.log(`[Mailer] Verification email sent: ${info.messageId}`);
-        return info;
     } catch (err) {
         console.error("[Mailer] Failed to send verification email:", err.message);
     }
