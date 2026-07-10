@@ -15,8 +15,7 @@ const validateRegister = [
     .isLength({ min: 3, max: 50 }).withMessage("Username must be between 3 and 50 characters."),
   body("email")
     .trim()
-    .isEmail().withMessage("Must be a valid email address.")
-    .normalizeEmail(),
+    .isEmail().withMessage("Must be a valid email address."),
   body("password")
     .isLength({ min: 8 }).withMessage("Password must be at least 8 characters long."),
   handleValidationErrors
@@ -25,8 +24,7 @@ const validateRegister = [
 const validateLogin = [
   body("email")
     .trim()
-    .isEmail().withMessage("Must be a valid email address.")
-    .normalizeEmail(),
+    .isEmail().withMessage("Must be a valid email address."),
   body("password")
     .notEmpty().withMessage("Password is required."),
   handleValidationErrors
@@ -35,16 +33,14 @@ const validateLogin = [
 const validateForgotPassword = [
   body("email")
     .trim()
-    .isEmail().withMessage("Must be a valid email address.")
-    .normalizeEmail(),
+    .isEmail().withMessage("Must be a valid email address."),
   handleValidationErrors
 ];
 
 const validateVerifyOtp = [
   body("email")
     .trim()
-    .isEmail().withMessage("Must be a valid email address.")
-    .normalizeEmail(),
+    .isEmail().withMessage("Must be a valid email address."),
   body("otp")
     .trim()
     .notEmpty().withMessage("OTP is required.")
@@ -56,8 +52,7 @@ const validateVerifyOtp = [
 const validateResendOtp = [
   body("email")
     .trim()
-    .isEmail().withMessage("Must be a valid email address.")
-    .normalizeEmail(),
+    .isEmail().withMessage("Must be a valid email address."),
   handleValidationErrors
 ];
 
