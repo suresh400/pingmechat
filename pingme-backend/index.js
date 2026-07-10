@@ -135,19 +135,38 @@ const ALLOWED_ORIGINS = [
 
 console.log("[CORS] Allowed Origins configured:", ALLOWED_ORIGINS);
 
+const corsOptions = {
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+        try {
+            const hostname = new URL(origin).hostname;
+            if (
+                hostname === "localhost" ||
+                hostname === "127.0.0.1" ||
+                hostname.endsWith(".vercel.app") ||
+                hostname.endsWith(".pingsme.in")
+            ) {
+                return callback(null, true);
+            }
+        } catch (e) {}
+        return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true
+};
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: ALLOWED_ORIGINS,
-        methods: ["GET", "POST"],
-        credentials: true,
+        ...corsOptions,
+        methods: ["GET", "POST"]
     },
 });
 
 const PORT = process.env.PORT || 5000;
 
-app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use((req, res, next) => {
     console.log(`[HTTP] ${req.method} ${req.url} - body:`, req.body);
