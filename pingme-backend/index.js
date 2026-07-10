@@ -127,9 +127,13 @@ const frontendUrls = rawFrontendUrl.split(",").map(url => url.trim().replace(/\/
 const ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://www.pingsme.in",
+    "https://pingsme.in",
     ...localIps,
     ...frontendUrls
 ].filter(Boolean);
+
+console.log("[CORS] Allowed Origins configured:", ALLOWED_ORIGINS);
 
 const app = express();
 const server = http.createServer(app);
