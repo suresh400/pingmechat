@@ -5,7 +5,7 @@ const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const db = require("./config/db");
-const { verifyToken, JWT_SECRET } = require("./middleware/auth");
+const { verifyToken, isAdmin, JWT_SECRET } = require("./middleware/auth");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -1094,15 +1094,20 @@ app.post("/api/auth/register", validateRegister, async (req, res) => {
 
         try {
             let adminId = 1;
-            const [admins] = await db.query("SELECT id FROM users WHERE username = ?", ["Admin"]);
+            const [admins] = await db.query("SELECT id FROM users WHERE email = ?", ["admin@pingme.chat"]);
             if (admins.length === 0) {
-                const adminAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=Admin`;
-                const adminPass = await bcrypt.hash("admin_secure_disabled_pass_" + Math.random(), 10);
-                const [adminResult] = await db.query(
-                    "INSERT INTO users (username, email, password, avatar) VALUES (?, ?, ?, ?)",
-                    ["Admin", "admin@pingme.chat", adminPass, adminAvatar]
-                );
-                adminId = adminResult.insertId;
+                const [adminsByUsername] = await db.query("SELECT id FROM users WHERE username = ? OR username = ?", ["Admin", "SystemAdmin"]);
+                if (adminsByUsername.length > 0) {
+                    adminId = adminsByUsername[0].id;
+                } else {
+                    const adminAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=Admin`;
+                    const adminPass = await bcrypt.hash("admin_secure_disabled_pass_" + Math.random(), 10);
+                    const [adminResult] = await db.query(
+                        "INSERT INTO users (username, email, password, avatar) VALUES (?, ?, ?, ?)",
+                        ["Admin", "admin@pingme.chat", adminPass, adminAvatar]
+                    );
+                    adminId = adminResult.insertId;
+                }
             } else {
                 adminId = admins[0].id;
             }
@@ -1150,6 +1155,122 @@ app.post("/api/auth/login", validateLogin, async (req, res) => {
         res.json({ token, user: { id: user.id, username: user.username, email: user.email, avatar: user.avatar } });
     } catch (err) {
         res.status(500).json({ message: "Server error.", error: err.message });
+    }
+});
+
+// Supabase Phone OTP Login/Register Exchange
+app.post("/api/auth/supabase-login", async (req, res) => {
+    const { token, phone } = req.body;
+    if (!token || !phone) {
+        return res.status(400).json({ message: "Supabase token and phone number are required." });
+    }
+
+    try {
+        const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+        const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+        let decodedUser;
+
+        if (supabaseUrl && supabaseAnonKey) {
+            try {
+                const baseUrl = supabaseUrl.replace(/\/$/, "");
+                const verifyRes = await fetch(`${baseUrl}/auth/v1/user`, {
+                    headers: {
+                        "Authorization": `Bearer ${token}`,
+                        "apikey": supabaseAnonKey
+                    }
+                });
+
+                if (!verifyRes.ok) {
+                    const errData = await verifyRes.json().catch(() => ({}));
+                    return res.status(401).json({
+                        message: "Invalid Supabase session token.",
+                        error: errData.error_description || errData.message || "Unauthorized"
+                    });
+                }
+
+                decodedUser = await verifyRes.json();
+            } catch (apiErr) {
+                console.error("[Auth] Supabase API verification failed, falling back to local decode:", apiErr);
+                decodedUser = jwt.decode(token);
+            }
+        } else {
+            console.warn("[Auth] SUPABASE_URL or SUPABASE_ANON_KEY is not configured in backend .env! Bypassing signature verification.");
+            decodedUser = jwt.decode(token);
+        }
+
+        if (!decodedUser) {
+            return res.status(401).json({ message: "Failed to decode Supabase token." });
+        }
+
+        // Verify that the token contains the matching phone number (normalize both to strip non-digits)
+        const tokenPhone = decodedUser.phone || decodedUser.user_metadata?.phone;
+        const normalizedTokenPhone = tokenPhone ? tokenPhone.replace(/\D/g, "") : "";
+        const normalizedInputPhone = phone.replace(/\D/g, "");
+
+        if (normalizedTokenPhone && normalizedTokenPhone !== normalizedInputPhone) {
+            return res.status(400).json({ message: "Phone number mismatch with verification token." });
+        }
+
+        // Use [phone]@phone.supabase as the unique email identifier to avoid schema edits
+        const cleanPhone = "+" + normalizedInputPhone;
+        const normalizedEmail = `${cleanPhone}@phone.supabase`;
+        const [rows] = await db.query("SELECT * FROM users WHERE email = ?", [normalizedEmail]);
+
+        let user;
+        if (rows.length === 0) {
+            // "no register": Auto-register user if not present (format username as [phone]@user and hide phone number by default)
+            const username = `${cleanPhone}@user`;
+            const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username.replace("+", "")}`;
+            const dummyPassword = await bcrypt.hash("supabase_otp_auth_disabled_" + Math.random(), 10);
+
+            const [result] = await db.query(
+                "INSERT INTO users (username, email, password, avatar, show_email) VALUES (?, ?, ?, ?, ?)",
+                [username, normalizedEmail, dummyPassword, avatarUrl, 0]
+            );
+
+            // Fetch the newly created user by email (adapter doesn't support SELECT by id)
+            const [newUsers] = await db.query("SELECT * FROM users WHERE email = ?", [normalizedEmail]);
+            user = newUsers[0];
+
+            // Send Admin welcome message to this new user
+            try {
+                let adminId = 1;
+                const [admins] = await db.query("SELECT id FROM users WHERE email = ?", ["admin@pingme.chat"]);
+                if (admins.length > 0) {
+                    adminId = admins[0].id;
+                } else {
+                    const [adminsByUsername] = await db.query("SELECT id FROM users WHERE username = ? OR username = ?", ["Admin", "SystemAdmin"]);
+                    if (adminsByUsername.length > 0) {
+                        adminId = adminsByUsername[0].id;
+                    }
+                }
+                const welcomeText = "Welcome to PingMe! We're thrilled to have you here. 👋 [FEEDBACK_FORM]";
+                await db.query(
+                    "INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
+                    [adminId, user.id, welcomeText]
+                );
+            } catch (adminErr) {
+                console.error("Error creating Admin welcome message:", adminErr);
+            }
+        } else {
+            user = rows[0];
+        }
+
+        // Generate standard local JWT token
+        const localToken = jwt.sign(
+            { id: user.id, username: user.username, email: user.email, avatar: user.avatar },
+            JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        res.json({
+            token: localToken,
+            user: { id: user.id, username: user.username, email: user.email, avatar: user.avatar }
+        });
+    } catch (err) {
+        console.error("Error during Supabase authentication exchange:", err);
+        res.status(500).json({ message: "Server error during authentication exchange.", error: err.message });
     }
 });
 // ─── PASSWORD RESET (OTP FLOW) ────────────────────────────────────────────────
@@ -1740,6 +1861,190 @@ app.put("/api/auth/show-email", verifyToken, async (req, res) => {
     }
 });
 
+// ── Admin Dashboard API Endpoints ─────────────────────────────────────────────
+
+app.get("/api/admin/stats", verifyToken, isAdmin, async (req, res) => {
+    try {
+        let usersCount = 0, messagesCount = 0, groupsCount = 0, feedbacksCount = 0;
+        try {
+            const [users] = await db.query("SELECT COUNT(*) AS total FROM users");
+            usersCount = users[0]?.total || 0;
+        } catch (e) { console.error("Error fetching users count:", e); }
+
+        try {
+            const [messages] = await db.query("SELECT COUNT(*) AS total FROM messages_global");
+            messagesCount = messages[0]?.total || 0;
+        } catch (e) { console.error("Error fetching messages count:", e); }
+
+        try {
+            const [groups] = await db.query("SELECT COUNT(*) AS total FROM groups");
+            groupsCount = groups[0]?.total || 0;
+        } catch (e) { console.error("Error fetching groups count:", e); }
+
+        try {
+            const [feedbacks] = await db.query("SELECT COUNT(*) AS total FROM feedback");
+            feedbacksCount = feedbacks[0]?.total || 0;
+        } catch (e) { console.error("Error fetching feedbacks count:", e); }
+
+        res.json({
+            usersCount,
+            messagesCount,
+            groupsCount,
+            feedbacksCount
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.get("/api/admin/messages", verifyToken, isAdmin, async (req, res) => {
+    try {
+        const adminId = req.user.id;
+        const [messages] = await db.query("select * from messages where receiver_id = ?", [adminId]);
+        const [users] = await db.query("select * from users");
+        const userMap = {};
+        for (const u of users) {
+            userMap[u.id] = { username: u.username, avatar: u.avatar, email: u.email };
+        }
+        const enrichedMessages = messages.map(m => ({
+            id: m.id,
+            sender_id: m.sender_id,
+            message: m.message,
+            created_at: m.created_at,
+            username: userMap[m.sender_id]?.username || "Unknown User",
+            avatar: userMap[m.sender_id]?.avatar || "",
+            email: userMap[m.sender_id]?.email || ""
+        }));
+        res.json(enrichedMessages);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.post("/api/admin/broadcast", verifyToken, isAdmin, async (req, res) => {
+    const { message, target, userIds } = req.body;
+    if (!message) {
+        return res.status(400).json({ message: "Broadcast message is required." });
+    }
+
+    try {
+        const adminId = req.user.id;
+        let targets = [];
+
+        if (target === "all") {
+            const [users] = await db.query("select * from users");
+            targets = users.filter(u => u.id !== adminId).map(u => u.id);
+        } else if (Array.isArray(userIds)) {
+            targets = userIds.map(Number);
+        }
+
+        if (targets.length === 0) {
+            return res.status(400).json({ message: "No target users found." });
+        }
+
+        for (const targetId of targets) {
+            await db.query(
+                "INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
+                [adminId, targetId, message]
+            );
+        }
+
+        res.json({ message: `Message broadcasted to ${targets.length} users successfully.` });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.get("/api/admin/users", verifyToken, isAdmin, async (req, res) => {
+    try {
+        const [users] = await db.query("select * from users");
+        // Strip sensitive info (passwords)
+        const safeUsers = users.map(u => ({
+            id: u.id,
+            username: u.username,
+            email: u.email,
+            avatar: u.avatar,
+            bio: u.bio,
+            show_email: u.show_email !== false,
+            is_online: u.is_online,
+            last_seen: u.last_seen,
+            created_at: u.created_at
+        }));
+        res.json(safeUsers);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.delete("/api/admin/users/:id", verifyToken, isAdmin, async (req, res) => {
+    try {
+        const userId = Number(req.params.id);
+        if (userId === req.user.id) {
+            return res.status(400).json({ message: "Admin cannot delete their own account." });
+        }
+        await db.query("delete from users where id = ?", [userId]);
+        res.json({ message: "User deleted completely." });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.get("/api/admin/feedbacks", verifyToken, isAdmin, async (req, res) => {
+    try {
+        const [feedbacks] = await db.query("select * from feedback");
+        const [users] = await db.query("select * from users");
+        const userMap = {};
+        for (const u of users) {
+            userMap[u.id] = { username: u.username, avatar: u.avatar };
+        }
+        const enrichedFeedbacks = feedbacks.map(f => ({
+            ...f,
+            username: userMap[f.user_id]?.username || "Unknown",
+            avatar: userMap[f.user_id]?.avatar || ""
+        }));
+        res.json(enrichedFeedbacks);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.get("/api/admin/settings", verifyToken, isAdmin, async (req, res) => {
+    try {
+        const settings = await db.getSettings();
+        res.json(settings);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.post("/api/admin/settings", verifyToken, isAdmin, async (req, res) => {
+    try {
+        const { monetization_enabled, premium_price, ad_unit_id } = req.body;
+        await db.setSetting("monetization_enabled", monetization_enabled);
+        await db.setSetting("premium_price", premium_price);
+        await db.setSetting("ad_unit_id", ad_unit_id);
+        res.json({ message: "Monetization settings saved successfully." });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Also expose a public settings endpoint so frontend can fetch monetization status
+app.get("/api/settings/monetization", async (req, res) => {
+    try {
+        const settings = await db.getSettings();
+        res.json({
+            monetization_enabled: settings.monetization_enabled,
+            premium_price: settings.premium_price,
+            ad_unit_id: settings.ad_unit_id
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+
+
 
 app.get("/api/messages/unread/total", verifyToken, async (req, res) => {
     try {
@@ -2140,8 +2445,35 @@ app.get("/api/calls/history", verifyToken, async (req, res) => {
     }
 });
 
-server.listen(PORT, () => {
+// Ensure Admin user exists with static/configurable password
+async function ensureAdminUser() {
+    try {
+        const [admins] = await db.query("SELECT id FROM users WHERE email = ?", ["admin@pingme.chat"]);
+        const adminPass = await bcrypt.hash(process.env.ADMIN_PASSWORD || "admin123", 10);
+        if (admins.length === 0) {
+            const [usersByUsername] = await db.query("SELECT id FROM users WHERE username = ?", ["Admin"]);
+            const uniqueUsername = usersByUsername.length === 0 ? "Admin" : "SystemAdmin";
+            const adminAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=Admin`;
+            console.log(`[Admin] Seeding Admin user with username: ${uniqueUsername}...`);
+            await db.query(
+                "INSERT INTO users (username, email, password, avatar) VALUES (?, ?, ?, ?)",
+                [uniqueUsername, "admin@pingme.chat", adminPass, adminAvatar]
+            );
+        } else {
+            console.log("[Admin] Syncing Admin password...");
+            await db.query(
+                "UPDATE users SET password = ? WHERE id = ?",
+                [adminPass, admins[0].id]
+            );
+        }
+    } catch (err) {
+        console.error("[Admin] Error ensuring Admin user:", err);
+    }
+}
+
+server.listen(PORT, async () => {
     console.log(`PingMe server running on port ${PORT}`);
+    await ensureAdminUser();
     // Start self-destruct periodic cleanup job
     setInterval(() => {
         if (db.cleanExpiredMessages) {

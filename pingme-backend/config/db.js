@@ -161,6 +161,12 @@ const TaskSchema = new mongoose.Schema({
 });
 const Task = mongoose.model("Task", TaskSchema);
 
+const SettingSchema = new mongoose.Schema({
+  key: { type: String, unique: true },
+  value: { type: mongoose.Schema.Types.Mixed }
+});
+const Setting = mongoose.model("Setting", SettingSchema);
+
 // ── Migration / Seed from db.json ──────────────────────────────────────────
 
 const seedIfEmpty = async () => {
@@ -495,6 +501,36 @@ async function handleSelect(sl, p) {
     return R([{ total }]);
   }
 
+  if (sl.includes("count(*) as total from feedback")) {
+    const total = await Feedback.countDocuments();
+    return R([{ total }]);
+  }
+
+  if (sl.includes("select * from messages where receiver_id = ?")) {
+    const adminId = Number(p[0]);
+    const msgs = await Message.find({ receiver_id: adminId }).sort({ created_at: -1 }).lean();
+    return R(msgs);
+  }
+
+  if (sl === "select * from users") {
+    return R(await User.find({}).sort({ created_at: -1 }).lean());
+  }
+
+  if (sl === "select * from feedback") {
+    return R(await Feedback.find({}).sort({ submitted_at: -1 }).lean());
+  }
+
+  if (sl === "select count(*) as total from messages_global") {
+    const total = await Message.countDocuments();
+    const groupTotal = await GroupMessage.countDocuments();
+    return R([{ total: total + groupTotal }]);
+  }
+
+  if (sl === "select count(*) as total from groups") {
+    const total = await Group.countDocuments();
+    return R([{ total }]);
+  }
+
   // messages
   if (sl.includes("count(*) as total from messages")) {
     const total = await Message.countDocuments({ receiver_id: Number(p[0]), is_read: false });
@@ -593,12 +629,14 @@ async function handleSelect(sl, p) {
 async function handleInsert(sl, p) {
   if (sl.includes("into users")) {
     const id = await nextId("users");
+    const show_email = p[4] !== undefined ? (p[4] === 1 || p[4] === true || p[4] === "true") : true;
     const user = new User({
       id,
       username: p[0],
       email: p[1],
       password: p[2],
       avatar: p[3],
+      show_email,
       bio: "Hey there! I am using PingMe.",
       is_online: 0,
       last_seen: new Date(),
@@ -839,6 +877,15 @@ async function handleUpdate(sl, p) {
 // ── SQL-to-MongoDB DELETE Handler ───────────────────────────────────────────
 
 async function handleDelete(sl, p) {
+  if (sl.includes("delete from users where id = ?")) {
+    const userId = Number(p[0]);
+    const res = await User.deleteOne({ id: userId });
+    await Message.deleteMany({ $or: [{ sender_id: userId }, { receiver_id: userId }] });
+    await GroupMember.deleteMany({ user_id: userId });
+    await GroupMessage.deleteMany({ sender_id: userId });
+    await Feedback.deleteMany({ user_id: userId });
+    return [{ affectedRows: res.deletedCount }];
+  }
   if (sl.includes("from messages")) {
     const u = Number(p[0]);
     const c = Number(p[1]);
@@ -977,6 +1024,31 @@ const db = {
       }
     } catch (err) {
       console.error("[SelfDestruct] Error cleaning expired messages:", err);
+    }
+  },
+  getSettings: async () => {
+    try {
+      const list = await Setting.find({}).lean();
+      const obj = {};
+      for (const item of list) {
+        obj[item.key] = item.value;
+      }
+      if (obj.monetization_enabled === undefined) obj.monetization_enabled = false;
+      if (obj.premium_price === undefined) obj.premium_price = "4.99";
+      if (obj.ad_unit_id === undefined) obj.ad_unit_id = "ca-pub-123456789";
+      return obj;
+    } catch (err) {
+      console.error("[Settings] Error getting settings:", err);
+      return { monetization_enabled: false, premium_price: "4.99", ad_unit_id: "ca-pub-123456789" };
+    }
+  },
+  setSetting: async (key, value) => {
+    try {
+      await Setting.updateOne({ key }, { value }, { upsert: true });
+      return true;
+    } catch (err) {
+      console.error("[Settings] Error setting:", err);
+      return false;
     }
   }
 };

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import { API_BASE } from "../constants";
+import { supabase, isSupabaseConfigured } from "../supabaseClient";
 
 const AuthContext = createContext(null);
 
@@ -20,37 +21,58 @@ export const AuthProvider = ({ children }) => {
     });
     const [token, setToken] = useState(() => localStorage.getItem("chatapp_token") || null);
 
+    const sendOtp = useCallback(async (phone) => {
+        if (!isSupabaseConfigured) {
+            throw new Error("Supabase is not configured. Please add your credentials to the .env file.");
+        }
+        const { data, error } = await supabase.auth.signInWithOtp({
+            phone: phone.trim(),
+        });
+        if (error) throw error;
+        return data;
+    }, []);
+
+    const verifyOtp = useCallback(async (phone, code) => {
+        const { data, error } = await supabase.auth.verifyOtp({
+            phone: phone.trim(),
+            token: code.trim(),
+            type: "sms",
+        });
+        if (error) throw error;
+
+        const session = data.session;
+        if (!session) throw new Error("No session returned from Supabase authentication.");
+
+        // Exchange Supabase session token for local backend token
+        const res = await fetch(`${API_BASE}/auth/supabase-login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: session.access_token, phone: phone.trim() }),
+        });
+        const resData = await res.json();
+        if (!res.ok) throw new Error(extractError(resData, "Authentication exchange failed"));
+
+        localStorage.setItem("chatapp_token", resData.token);
+        localStorage.setItem("chatapp_user", JSON.stringify(resData.user));
+        setToken(resData.token);
+        setCurrentUser(resData.user);
+        return resData;
+    }, []);
+
     const login = useCallback(async (email, password) => {
         const res = await fetch(`${API_BASE}/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(extractError(data, "Login failed"));
-        localStorage.setItem("chatapp_token", data.token);
-        localStorage.setItem("chatapp_user", JSON.stringify(data.user));
-        setToken(data.token);
-        setCurrentUser(data.user);
-        return data;
-    }, []);
+        const resData = await res.json();
+        if (!res.ok) throw new Error(extractError(resData, "Login failed"));
 
-    const register = useCallback(async (username, email, password, otp) => {
-        const res = await fetch(`${API_BASE}/auth/register`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, email, password, otp }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(extractError(data, "Registration failed"));
-        if (data.otpRequired) {
-            return data;
-        }
-        localStorage.setItem("chatapp_token", data.token);
-        localStorage.setItem("chatapp_user", JSON.stringify(data.user));
-        setToken(data.token);
-        setCurrentUser(data.user);
-        return data;
+        localStorage.setItem("chatapp_token", resData.token);
+        localStorage.setItem("chatapp_user", JSON.stringify(resData.user));
+        setToken(resData.token);
+        setCurrentUser(resData.user);
+        return resData;
     }, []);
 
     const logout = useCallback(() => {
@@ -104,7 +126,7 @@ export const AuthProvider = ({ children }) => {
     }, [token, currentUser]);
 
     return (
-        <AuthContext.Provider value={{ currentUser, token, login, logout, register, authFetch, isAuthenticated: !!token, updateCurrentUser, refreshUser }}>
+        <AuthContext.Provider value={{ currentUser, token, sendOtp, verifyOtp, login, logout, authFetch, isAuthenticated: !!token, updateCurrentUser, refreshUser }}>
             {children}
         </AuthContext.Provider>
     );

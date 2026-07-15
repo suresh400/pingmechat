@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box, Stack, Avatar, Typography, InputBase, IconButton,
   Divider, Tooltip, Chip, CircularProgress, Snackbar, Alert, Menu, MenuItem,
-  useMediaQuery, useTheme, Dialog, DialogContent, Rating
+  useMediaQuery, useTheme, Dialog, DialogContent, Rating, Button
 } from "@mui/material";
 import {
   MagnifyingGlass, Phone, VideoCamera, Info, PaperPlaneRight, CaretLeft,
   Paperclip, Smiley, Prohibit, Trash, SignOut, X,
   PhoneIncoming, PhoneOutgoing, DotsThreeVertical, DownloadSimple, FileText, Check, Checks,
-  EnvelopeSimple, User, Hourglass, Palette, ListChecks,
+  EnvelopeSimple, User, Hourglass, Palette, ListChecks, Star,
 } from "phosphor-react";
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
 import useSettings from "../../hooks/useSettings";
@@ -231,6 +231,16 @@ const GeneralApp = () => {
   const theme = useTheme();
   const isDark = themeMode === "dark";
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const [monetization, setMonetization] = useState(null);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/settings/monetization`)
+      .then(res => res.json())
+      .then(data => setMonetization(data))
+      .catch(err => console.error("Error loading monetization settings:", err));
+  }, []);
 
   // Contacts (search-only for privacy)
   const [contacts, setContacts] = useState([]);
@@ -766,6 +776,16 @@ const GeneralApp = () => {
               </Box>
             ))}
           </Box>
+          {monetization?.monetization_enabled && (
+            <Box sx={{ p: 2, m: 1.5, borderRadius: 2, bgcolor: isDark ? "rgba(255, 215, 0, 0.08)" : "#FFFDE7", border: "1px solid", borderColor: isDark ? "rgba(255, 215, 0, 0.3)" : "#FFF59D", display: "flex", flexDirection: "column", gap: 1 }}>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Star size={16} color="#FFD700" weight="fill" />
+                <Typography variant="subtitle2" fontWeight={700} sx={{ color: isDark ? "#FFD700" : "#F57F17", fontSize: 12 }}>PingMe Premium</Typography>
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>Get ad-free experience & unlimited features for just ${monetization?.premium_price}/mo.</Typography>
+              <Button size="small" variant="contained" sx={{ bgcolor: isDark ? "#FFD700" : "#F57F17", color: "#000", fontWeight: 700, fontSize: 10, py: 0.5, "&:hover": { bgcolor: isDark ? "#FFC700" : "#E65100" } }} onClick={() => setUpgradeOpen(true)}>Upgrade Now</Button>
+            </Box>
+          )}
           <Divider />
           {/* Logged-in user */}
           <Box sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 1.5, bgcolor: "background.neutral" }}>
@@ -1145,25 +1165,38 @@ const GeneralApp = () => {
                       </Box>
                     </Stack>
 
-                    {/* Email row — only if contact allows it */}
+                    {/* Email/Phone row — only if contact allows it */}
                     {contactProfile === null ? (
                       <Stack direction="row" alignItems="center" spacing={1.5}>
                         <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
                         <CircularProgress size={14} />
                       </Stack>
                     ) : contactProfile?.email ? (
-                      <Stack direction="row" alignItems="center" spacing={1.5}>
-                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>Email</Typography>
-                          <Typography variant="body2" fontWeight={600} sx={{ wordBreak: "break-all" }}>{contactProfile.email}</Typography>
-                        </Box>
-                      </Stack>
+                      (() => {
+                        const isPhone = contactProfile.email.endsWith("@phone.supabase");
+                        const label = isPhone ? "Phone Number" : "Email";
+                        const displayVal = isPhone ? contactProfile.email.replace("@phone.supabase", "") : contactProfile.email;
+                        return (
+                          <Stack direction="row" alignItems="center" spacing={1.5}>
+                            <Box sx={{ color: "text.secondary", flexShrink: 0 }}>
+                              {isPhone ? <Phone size={18} /> : <EnvelopeSimple size={18} />}
+                            </Box>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>{label}</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ wordBreak: "break-all" }}>{displayVal}</Typography>
+                            </Box>
+                          </Stack>
+                        );
+                      })()
                     ) : (
                       <Stack direction="row" alignItems="center" spacing={1.5}>
-                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
+                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}>
+                          {activeContact.username.startsWith("+") ? <Phone size={18} /> : <EnvelopeSimple size={18} />}
+                        </Box>
                         <Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>Email</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>
+                            {activeContact.username.startsWith("+") ? "Phone Number" : "Email"}
+                          </Typography>
                           <Typography variant="body2" color="text.disabled" sx={{ fontStyle: "italic" }}>Hidden by user</Typography>
                         </Box>
                       </Stack>
@@ -1276,25 +1309,38 @@ const GeneralApp = () => {
                       </Box>
                     </Stack>
 
-                    {/* Email row — only if contact allows it */}
+                    {/* Email/Phone row — only if contact allows it */}
                     {contactProfile === null ? (
                       <Stack direction="row" alignItems="center" spacing={1.5}>
                         <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
                         <CircularProgress size={14} />
                       </Stack>
                     ) : contactProfile?.email ? (
-                      <Stack direction="row" alignItems="center" spacing={1.5}>
-                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>Email</Typography>
-                          <Typography variant="body2" fontWeight={600} sx={{ wordBreak: "break-all" }}>{contactProfile.email}</Typography>
-                        </Box>
-                      </Stack>
+                      (() => {
+                        const isPhone = contactProfile.email.endsWith("@phone.supabase");
+                        const label = isPhone ? "Phone Number" : "Email";
+                        const displayVal = isPhone ? contactProfile.email.replace("@phone.supabase", "") : contactProfile.email;
+                        return (
+                          <Stack direction="row" alignItems="center" spacing={1.5}>
+                            <Box sx={{ color: "text.secondary", flexShrink: 0 }}>
+                              {isPhone ? <Phone size={18} /> : <EnvelopeSimple size={18} />}
+                            </Box>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>{label}</Typography>
+                              <Typography variant="body2" fontWeight={600} sx={{ wordBreak: "break-all" }}>{displayVal}</Typography>
+                            </Box>
+                          </Stack>
+                        );
+                      })()
                     ) : (
                       <Stack direction="row" alignItems="center" spacing={1.5}>
-                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}><EnvelopeSimple size={18} /></Box>
+                        <Box sx={{ color: "text.secondary", flexShrink: 0 }}>
+                          {activeContact.username.startsWith("+") ? <Phone size={18} /> : <EnvelopeSimple size={18} />}
+                        </Box>
                         <Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>Email</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.8 }}>
+                            {activeContact.username.startsWith("+") ? "Phone Number" : "Email"}
+                          </Typography>
                           <Typography variant="body2" color="text.disabled" sx={{ fontStyle: "italic" }}>Hidden by user</Typography>
                         </Box>
                       </Stack>
@@ -1423,6 +1469,17 @@ const GeneralApp = () => {
           )
         )
       )}
+      <Dialog open={upgradeOpen} onClose={() => setUpgradeOpen(false)} maxWidth="xs" fullWidth>
+        <Box p={3} textAlign="center" sx={{ bgcolor: isDark ? "background.paper" : "#fff" }}>
+          <Typography variant="h6" fontWeight={800} mb={1}>Upgrade to PingMe Premium</Typography>
+          <Typography variant="body2" color="text.secondary" mb={3}>Enjoy an ad-free experience, unlimited VoIP calls, custom whiteboard themes, and priority support.</Typography>
+          <Box p={2} mb={3} borderRadius={2} bgcolor="action.hover" border="1px dashed" borderColor="divider">
+            <Typography variant="h4" fontWeight={800} color="primary.main">${monetization?.premium_price || "4.99"}</Typography>
+            <Typography variant="caption" color="text.secondary">per month</Typography>
+          </Box>
+          <Button fullWidth variant="contained" sx={{ bgcolor: "text.primary", color: "background.paper", "&:hover": { bgcolor: "text.primary", opacity: 0.9 } }} onClick={() => { setUpgradeOpen(false); setSnackbar({ open: true, message: "Thank you for upgrading to Premium!", severity: "success" }); }}>Proceed to Payment</Button>
+        </Box>
+      </Dialog>
     </Stack>
   );
 };

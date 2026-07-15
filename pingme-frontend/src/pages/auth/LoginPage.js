@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-    Box, Stack, Typography, TextField, Button, IconButton,
-    InputAdornment, Alert, Link, CircularProgress,
+    Box, Stack, Typography, TextField, Button,
+    Alert, CircularProgress, Link
 } from "@mui/material";
-import { Eye, EyeSlash, ChatCircleDots } from "phosphor-react";
+import { ChatCircleDots } from "phosphor-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import Threads from "./Threads";
@@ -11,15 +11,17 @@ import { API_BASE } from "../../constants";
 
 const LoginPage = () => {
     const navigate = useNavigate();
-    const { login } = useAuth();
+    const { sendOtp, verifyOtp } = useAuth();
 
-    const [form, setForm] = useState({ email: "", password: "" });
-    const [showPw, setShowPw] = useState(false);
+    const [phone, setPhone] = useState("");
+    const [otp, setOtp] = useState("");
+    const [otpSent, setOtpSent] = useState(false);
     const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
     const [loading, setLoading] = useState(false);
     const [userCount, setUserCount] = useState(null);
 
-    React.useEffect(() => {
+    useEffect(() => {
         const fetchUserCount = async () => {
             try {
                 const res = await fetch(`${API_BASE}/auth/users-count`);
@@ -32,24 +34,63 @@ const LoginPage = () => {
             }
         };
         fetchUserCount();
-        const interval = setInterval(fetchUserCount, 5000); // check every 5s
+        const interval = setInterval(fetchUserCount, 10000); // check every 10s
         return () => clearInterval(interval);
     }, []);
 
-    const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const handleSendCode = async (e) => {
+        if (e) e.preventDefault();
         setError("");
+        setSuccess("");
+
+        if (!phone.trim()) {
+            setError("Phone number is required.");
+            return;
+        }
+
+        if (!phone.trim().startsWith("+")) {
+            setError("Phone number must include country code (e.g. +1234567890).");
+            return;
+        }
+
         setLoading(true);
         try {
-            await login(form.email, form.password);
-            navigate("/app");
+            await sendOtp(phone);
+            setOtpSent(true);
+            setSuccess(`A verification code has been sent to ${phone}.`);
         } catch (err) {
-            setError(err.message);
+            setError(err.message || "Failed to send OTP code.");
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleVerifyCode = async (e) => {
+        e.preventDefault();
+        setError("");
+        setSuccess("");
+
+        if (otp.length !== 6) {
+            setError("Please enter a valid 6-digit verification code.");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await verifyOtp(phone, otp);
+            navigate("/app");
+        } catch (err) {
+            setError(err.message || "Invalid or expired verification code.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleBack = () => {
+        setOtp("");
+        setOtpSent(false);
+        setError("");
+        setSuccess("");
     };
 
     return (
@@ -109,105 +150,126 @@ const LoginPage = () => {
                         <ChatCircleDots size={30} color="#fff" weight="fill" />
                     </Box>
                     <Typography variant="h4" fontWeight={900} sx={{ color: "#fff", letterSpacing: 1, textTransform: "uppercase" }}>PingMe</Typography>
-                    <Typography variant="body2" sx={{ color: "rgba(255, 255, 255, 0.6)" }}>Sign in to continue chatting</Typography>
+                    <Typography variant="body2" sx={{ color: "rgba(255, 255, 255, 0.6)" }}>
+                        {otpSent ? "Verify OTP code" : "Sign in with Phone"}
+                    </Typography>
                 </Stack>
 
                 {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{error}</Alert>}
+                {success && <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>{success}</Alert>}
 
-                <form onSubmit={handleSubmit}>
-                    <Stack spacing={2.5}>
-                        <TextField
-                            label="Email address"
-                            name="email"
-                            type="email"
-                            fullWidth
-                            required
-                            value={form.email}
-                            onChange={handleChange}
-                            variant="outlined"
-                            size="small"
-                            sx={{
-                                "& .MuiInputBase-input": { color: "#fff" },
-                                "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
-                                "& .MuiInputLabel-root.Mui-focused": { color: "#3B82F6" },
-                                "& .MuiOutlinedInput-root": {
-                                    "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
-                                    "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-                                    "&.Mui-focused fieldset": { borderColor: "#3B82F6" },
-                                },
-                            }}
-                        />
-                        <TextField
-                            label="Password"
-                            name="password"
-                            type={showPw ? "text" : "password"}
-                            fullWidth
-                            required
-                            value={form.password}
-                            onChange={handleChange}
-                            variant="outlined"
-                            size="small"
-                            sx={{
-                                "& .MuiInputBase-input": { color: "#fff" },
-                                "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
-                                "& .MuiInputLabel-root.Mui-focused": { color: "#3B82F6" },
-                                "& .MuiOutlinedInput-root": {
-                                    "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
-                                    "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-                                    "&.Mui-focused fieldset": { borderColor: "#3B82F6" },
-                                },
-                            }}
-                            InputProps={{
-                                endAdornment: (
-                                    <InputAdornment position="end">
-                                        <IconButton onClick={() => setShowPw(!showPw)} edge="end" size="small" sx={{ color: "rgba(255, 255, 255, 0.6)" }}>
-                                            {showPw ? <EyeSlash size={18} /> : <Eye size={18} />}
-                                        </IconButton>
-                                    </InputAdornment>
-                                ),
-                            }}
-                        />
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            fullWidth
-                            disabled={loading}
-                            sx={{
-                                backgroundColor: "#fff",
-                                color: "#000",
-                                borderRadius: 2,
-                                py: 1.2,
-                                fontWeight: 800,
-                                textTransform: "none",
-                                fontSize: 15,
-                                "&:hover": { backgroundColor: "#e5e5e5" },
-                            }}
-                        >
-                            {loading ? <CircularProgress size={22} color="inherit" /> : "Sign In"}
-                        </Button>
-                    </Stack>
-                </form>
-
-                <Stack direction="row" alignItems="center" justifyContent="flex-end" mt={1.5} mb={0.5}>
-                    <Link
-                        component="button"
-                        onClick={() => navigate("/forgot-password")}
-                        sx={{ color: "rgba(255, 255, 255, 0.6)", fontWeight: 600, fontSize: 13, cursor: "pointer", "&:hover": { color: "#fff" } }}
-                    >
-                        Forgot Password?
-                    </Link>
-                </Stack>
-
-                <Typography variant="body2" align="center" sx={{ mt: 3, color: "rgba(255,255,255,0.6)" }}>
-                    Don't have an account?{" "}
-                    <Link
-                        component="button"
-                        onClick={() => navigate("/register")}
-                        sx={{ color: "#fff", fontWeight: 800, cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
-                    >
-                        Register
-                    </Link>
-                </Typography>
+                {!otpSent ? (
+                    <form onSubmit={handleSendCode}>
+                        <Stack spacing={2.5}>
+                            <TextField
+                                label="Phone Number"
+                                name="phone"
+                                type="tel"
+                                fullWidth
+                                required
+                                placeholder="+1234567890"
+                                value={phone}
+                                onChange={(e) => setPhone(e.target.value)}
+                                variant="outlined"
+                                size="small"
+                                helperText="Enter phone with country code (e.g., +15550199)"
+                                FormHelperTextProps={{ sx: { color: "rgba(255,255,255,0.4)" } }}
+                                sx={{
+                                    "& .MuiInputBase-input": { color: "#fff" },
+                                    "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
+                                    "& .MuiInputLabel-root.Mui-focused": { color: "#fff" },
+                                    "& .MuiOutlinedInput-root": {
+                                        "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
+                                        "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
+                                        "&.Mui-focused fieldset": { borderColor: "#fff" },
+                                    },
+                                }}
+                            />
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                fullWidth
+                                disabled={loading}
+                                sx={{
+                                    backgroundColor: "#fff",
+                                    color: "#000",
+                                    borderRadius: 2,
+                                    py: 1.2,
+                                    fontWeight: 800,
+                                    textTransform: "none",
+                                    fontSize: 15,
+                                    "&:hover": { backgroundColor: "#e5e5e5" },
+                                }}
+                            >
+                                {loading ? <CircularProgress size={22} color="inherit" /> : "Send OTP"}
+                            </Button>
+                        </Stack>
+                    </form>
+                ) : (
+                    <form onSubmit={handleVerifyCode}>
+                        <Stack spacing={2.5}>
+                            <TextField
+                                label="6-Digit OTP Code"
+                                name="otp"
+                                fullWidth
+                                required
+                                placeholder="123456"
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                                variant="outlined"
+                                size="small"
+                                sx={{
+                                    "& .MuiInputBase-input": { color: "#fff" },
+                                    "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
+                                    "& .MuiInputLabel-root.Mui-focused": { color: "#fff" },
+                                    "& .MuiOutlinedInput-root": {
+                                        "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
+                                        "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
+                                        "&.Mui-focused fieldset": { borderColor: "#fff" },
+                                    },
+                                }}
+                            />
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                fullWidth
+                                disabled={loading || otp.length !== 6}
+                                sx={{
+                                    backgroundColor: "#fff",
+                                    color: "#000",
+                                    borderRadius: 2,
+                                    py: 1.2,
+                                    fontWeight: 800,
+                                    textTransform: "none",
+                                    fontSize: 15,
+                                    "&:hover": { backgroundColor: "#e5e5e5" },
+                                    "&.Mui-disabled": { backgroundColor: "rgba(255, 255, 255, 0.3)", color: "rgba(0,0,0,0.5)" }
+                                }}
+                            >
+                                {loading ? <CircularProgress size={22} color="inherit" /> : "Verify & Sign In"}
+                             </Button>
+                            <Stack direction="row" justifyContent="space-between" mt={1}>
+                                <Link
+                                    component="button"
+                                    type="button"
+                                    onClick={() => handleSendCode(null)}
+                                    disabled={loading}
+                                    sx={{ color: "#3B82F6", fontWeight: 700, fontSize: 13, textDecoration: "none", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
+                                >
+                                    Resend Code
+                                </Link>
+                                <Link
+                                    component="button"
+                                    type="button"
+                                    onClick={handleBack}
+                                    sx={{ color: "rgba(255,255,255,0.5)", fontWeight: 700, fontSize: 13, textDecoration: "none", cursor: "pointer", "&:hover": { color: "#fff" } }}
+                                >
+                                    Change Phone Number
+                                </Link>
+                            </Stack>
+                        </Stack>
+                    </form>
+                )}
 
                 {/* Active users display */}
                 {userCount !== null && (

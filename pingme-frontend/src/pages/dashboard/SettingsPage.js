@@ -207,7 +207,11 @@ const SettingsPage = () => {
                                 </Box>
                                 <Box>
                                     <Typography variant="h6" fontWeight={700} sx={{ color: monochromaticStyles.primary }}>{currentUser?.username}</Typography>
-                                    <Typography variant="body2" sx={{ color: monochromaticStyles.secondary }}>{currentUser?.email}</Typography>
+                                    <Typography variant="body2" sx={{ color: monochromaticStyles.secondary }}>
+                                        {currentUser?.email?.endsWith("@phone.supabase")
+                                            ? currentUser.email.replace("@phone.supabase", "")
+                                            : currentUser?.email}
+                                    </Typography>
                                 </Box>
                             </Stack>
 
@@ -283,8 +287,12 @@ const SettingsPage = () => {
                                 <Stack spacing={1}>
                                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", py: 1 }}>
                                         <Box>
-                                            <Typography variant="body2" fontWeight={600} sx={{ color: monochromaticStyles.primary }}>Show Email to Others</Typography>
-                                            <Typography variant="caption" sx={{ color: monochromaticStyles.secondary }}>Let contacts see your email in your profile</Typography>
+                                            <Typography variant="body2" fontWeight={600} sx={{ color: monochromaticStyles.primary }}>
+                                                 {currentUser?.email?.endsWith("@phone.supabase") ? "Show Phone Number to Others" : "Show Email to Others"}
+                                            </Typography>
+                                            <Typography variant="caption" sx={{ color: monochromaticStyles.secondary }}>
+                                                 {currentUser?.email?.endsWith("@phone.supabase") ? "Let contacts see your phone number in your profile" : "Let contacts see your email in your profile"}
+                                            </Typography>
                                         </Box>
                                         <Switch
                                             size="small"

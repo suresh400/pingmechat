@@ -41,11 +41,11 @@ export default function Router() {
     { path: "/", element: <LandingPage /> },
 
     // ── Auth pages (redirect to dashboard if already logged in) ──
-    { path: "/login", element: <GuestRoute><LoginPage /></GuestRoute> },
-    { path: "/register", element: <GuestRoute><RegisterPage /></GuestRoute> },
-    { path: "/forgot-password", element: <GuestRoute><ForgotPasswordPage /></GuestRoute> },
-    { path: "/verify-otp", element: <OTPVerificationPage /> },
-    { path: "/reset-password", element: <ResetPasswordPage /> },
+    { path: "/login", element: <Navigate to="/" state={{ authMode: "login" }} replace /> },
+    { path: "/register", element: <Navigate to="/" replace /> },
+    { path: "/forgot-password", element: <Navigate to="/" replace /> },
+    { path: "/verify-otp", element: <Navigate to="/" replace /> },
+    { path: "/reset-password", element: <Navigate to="/" replace /> },
 
     // ── Protected dashboard (using a pathless layout route to keep /app, /groups, etc. flat) ──
     {
@@ -58,6 +58,7 @@ export default function Router() {
         { path: "/settings", element: <SettingsPage /> },
       ],
     },
+    { path: "/admin", element: <AdminDashboard /> },
     
     // ── 404 Pages ──
     { path: "/404", element: <Page404 /> },
@@ -71,9 +72,8 @@ const GroupsPage = Loadable(lazy(() => import("../pages/dashboard/GroupsPage")))
 const CallHistoryPage = Loadable(lazy(() => import("../pages/dashboard/CallHistoryPage")));
 const SettingsPage = Loadable(lazy(() => import("../pages/dashboard/SettingsPage")));
 const TasksPage = Loadable(lazy(() => import("../pages/dashboard/TasksPage")));
+const AdminDashboard = Loadable(lazy(() => import("../pages/dashboard/AdminDashboard")));
 const Page404 = Loadable(lazy(() => import("../pages/Page404")));
-const LoginPage = Loadable(lazy(() => import("../pages/auth/LoginPage")));
-const RegisterPage = Loadable(lazy(() => import("../pages/auth/RegisterPage")));
 const ForgotPasswordPage = Loadable(lazy(() => import("../pages/auth/ForgotPasswordPage")));
 const OTPVerificationPage = Loadable(lazy(() => import("../pages/auth/OTPVerificationPage")));
 const ResetPasswordPage = Loadable(lazy(() => import("../pages/auth/ResetPasswordPage")));
