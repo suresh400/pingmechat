@@ -2,6 +2,7 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
+const helmet = require("helmet");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const db = require("./config/db");
@@ -168,6 +169,45 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// ── Security Headers ───────────────────────────────────────────────────────────
+// Use helmet with a custom CSP that allows our frontend origins and necessary CDNs
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: ["'self'"],
+                styleSrc: ["'self'", "'unsafe-inline'"],
+                imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://lh3.googleusercontent.com", "blob:"],
+                connectSrc: [
+                    "'self'",
+                    "https://www.pingsme.in",
+                    "https://pingsme.in",
+                    "wss://www.pingsme.in",
+                    "wss://pingsme.in",
+                    ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(",").map(u => u.trim()) : [])
+                ],
+                fontSrc: ["'self'", "https://fonts.gstatic.com"],
+                objectSrc: ["'none'"],
+                upgradeInsecureRequests: [],
+            },
+        },
+        crossOriginEmbedderPolicy: false, // needed for socket.io & agora
+        referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    })
+);
+// Additional headers not covered by helmet defaults
+app.use((req, res, next) => {
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader(
+        "Permissions-Policy",
+        "camera=(self), microphone=(self), geolocation=(), payment=(), usb=(), fullscreen=(self)"
+    );
+    next();
+});
 app.use((req, res, next) => {
     console.log(`[HTTP] ${req.method} ${req.url} - body:`, req.body);
     next();
