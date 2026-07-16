@@ -167,6 +167,23 @@ const SettingSchema = new mongoose.Schema({
 });
 const Setting = mongoose.model("Setting", SettingSchema);
 
+const ReportSchema = new mongoose.Schema({
+  id: { type: Number, unique: true },
+  reporter_id: { type: Number },
+  reported_id: { type: Number },
+  reason: { type: String },
+  created_at: { type: Date, default: Date.now }
+});
+const Report = mongoose.model("Report", ReportSchema);
+
+const SuggestionSchema = new mongoose.Schema({
+  id: { type: Number, unique: true },
+  user_id: { type: Number },
+  suggestion: { type: String },
+  submitted_at: { type: Date, default: Date.now }
+});
+const Suggestion = mongoose.model("Suggestion", SuggestionSchema);
+
 // ── Migration / Seed from db.json ──────────────────────────────────────────
 
 const seedIfEmpty = async () => {
@@ -884,6 +901,8 @@ async function handleDelete(sl, p) {
     await GroupMember.deleteMany({ user_id: userId });
     await GroupMessage.deleteMany({ sender_id: userId });
     await Feedback.deleteMany({ user_id: userId });
+    await Report.deleteMany({ $or: [{ reporter_id: userId }, { reported_id: userId }] });
+    await Suggestion.deleteMany({ user_id: userId });
     return [{ affectedRows: res.deletedCount }];
   }
   if (sl.includes("from messages")) {
@@ -1049,6 +1068,76 @@ const db = {
     } catch (err) {
       console.error("[Settings] Error setting:", err);
       return false;
+    }
+  },
+  getReports: async () => {
+    try {
+      const reportsList = await Report.find({}).sort({ created_at: -1 }).lean();
+      const enrichedReports = [];
+      for (const r of reportsList) {
+        const reporter = await User.findOne({ id: r.reporter_id }).lean();
+        const reported = await User.findOne({ id: r.reported_id }).lean();
+        enrichedReports.push({
+          ...r,
+          reporter_username: reporter ? reporter.username : `User ${r.reporter_id}`,
+          reported_username: reported ? reported.username : `User ${r.reported_id}`,
+          reported_avatar: reported ? reported.avatar : "",
+          reported_email: reported ? reported.email : ""
+        });
+      }
+      return enrichedReports;
+    } catch (err) {
+      console.error("[DB] Error getting reports:", err);
+      return [];
+    }
+  },
+  createReport: async (reportData) => {
+    try {
+      const id = await nextId("reports");
+      const report = new Report({ id, ...reportData });
+      await report.save();
+      return report.toObject();
+    } catch (err) {
+      console.error("[DB] Error saving report:", err);
+      throw err;
+    }
+  },
+  deleteReport: async (reportId) => {
+    try {
+      await Report.deleteOne({ id: Number(reportId) });
+      return true;
+    } catch (err) {
+      console.error("[DB] Error deleting report:", err);
+      throw err;
+    }
+  },
+  getSuggestions: async () => {
+    try {
+      const suggestionsList = await Suggestion.find({}).sort({ submitted_at: -1 }).lean();
+      const enrichedSuggestions = [];
+      for (const s of suggestionsList) {
+        const u = await User.findOne({ id: s.user_id }).lean();
+        enrichedSuggestions.push({
+          ...s,
+          username: u ? u.username : `User ${s.user_id}`,
+          avatar: u ? u.avatar : ""
+        });
+      }
+      return enrichedSuggestions;
+    } catch (err) {
+      console.error("[DB] Error getting suggestions:", err);
+      return [];
+    }
+  },
+  createSuggestion: async (suggestionData) => {
+    try {
+      const id = await nextId("suggestions");
+      const suggestion = new Suggestion({ id, ...suggestionData });
+      await suggestion.save();
+      return suggestion.toObject();
+    } catch (err) {
+      console.error("[DB] Error saving suggestion:", err);
+      throw err;
     }
   }
 };

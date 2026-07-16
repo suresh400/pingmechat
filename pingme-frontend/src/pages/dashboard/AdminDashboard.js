@@ -3,11 +3,11 @@ import {
   Box, Stack, Typography, TextField, Button, Paper, Tabs, Tab,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Avatar, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
-  Switch, CircularProgress, Alert, Snackbar, Grid, Card, CardContent
+  Switch, CircularProgress, Alert, Snackbar, Grid, Card, CardContent, Divider
 } from "@mui/material";
 import {
   Trash, ChartBar, Users, ChatCircleDots, ShieldCheck,
-  Star, SignOut, Megaphone, Coins
+  Star, SignOut, Megaphone, Coins, Warning
 } from "phosphor-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -23,13 +23,15 @@ const AdminDashboard = () => {
   const [loginError, setLoginError] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
 
-  // Tab state: 0 = Users, 1 = Feedback, 2 = Monetization
+  // Tab state: 0 = Users, 1 = Feedback & Suggestions, 2 = Reports, 3 = Broadcast, 4 = Monetization
   const [activeTab, setActiveTab] = useState(0);
 
   // Data states
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
   const [monetization, setMonetization] = useState({
     monetization_enabled: false,
     premium_price: "4.99",
@@ -39,6 +41,12 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+
+  // Broadcast States
+  const [broadcastTarget, setBroadcastTarget] = useState("all");
+  const [broadcastUsername, setBroadcastUsername] = useState("");
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
 
   // Delete User Dialog
   const [deleteUserOpen, setDeleteUserOpen] = useState(false);
@@ -64,6 +72,14 @@ const AdminDashboard = () => {
       const feedbacksRes = await authFetch(`${API_BASE}/admin/feedbacks`);
       if (feedbacksRes.ok) setFeedbacks(await feedbacksRes.json());
 
+      // Fetch reports
+      const reportsRes = await authFetch(`${API_BASE}/admin/reports`);
+      if (reportsRes.ok) setReports(await reportsRes.json());
+
+      // Fetch suggestions
+      const suggestionsRes = await authFetch(`${API_BASE}/admin/suggestions`);
+      if (suggestionsRes.ok) setSuggestions(await suggestionsRes.json());
+
       // Fetch settings
       const settingsRes = await authFetch(`${API_BASE}/admin/settings`);
       if (settingsRes.ok) setMonetization(await settingsRes.json());
@@ -73,6 +89,54 @@ const AdminDashboard = () => {
       setSnackbar({ open: true, message: "Error fetching admin dashboard data.", severity: "error" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDismissReport = async (reportId) => {
+    try {
+      const res = await authFetch(`${API_BASE}/admin/reports/${reportId}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        setSnackbar({ open: true, message: "Report dismissed successfully. ✓", severity: "success" });
+        fetchDashboardData();
+      } else {
+        throw new Error("Failed to dismiss report.");
+      }
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: "error" });
+    }
+  };
+
+  const handleSendBroadcast = async () => {
+    if (!broadcastMessage.trim()) {
+      setSnackbar({ open: true, message: "Please type a message to send.", severity: "error" });
+      return;
+    }
+    if (broadcastTarget === "single" && !broadcastUsername.trim()) {
+      setSnackbar({ open: true, message: "Please enter a username.", severity: "error" });
+      return;
+    }
+    setSendingBroadcast(true);
+    try {
+      const res = await authFetch(`${API_BASE}/admin/broadcast`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target: broadcastTarget,
+          username: broadcastTarget === "single" ? broadcastUsername.trim() : undefined,
+          message: broadcastMessage.trim()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setSnackbar({ open: true, message: data.message || "Announcement sent successfully! ✓", severity: "success" });
+      setBroadcastMessage("");
+      setBroadcastUsername("");
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: "error" });
+    } finally {
+      setSendingBroadcast(false);
     }
   };
 
@@ -309,7 +373,9 @@ const AdminDashboard = () => {
             }}
           >
             <Tab label="Users Management" icon={<Users size={18} />} iconPosition="start" />
-            <Tab label="Feedbacks Log" icon={<Megaphone size={18} />} iconPosition="start" />
+            <Tab label="Feedbacks & Suggestions" icon={<Megaphone size={18} />} iconPosition="start" />
+            <Tab label="User Reports" icon={<Warning size={18} />} iconPosition="start" />
+            <Tab label="Broadcast Updates" icon={<ChatCircleDots size={18} />} iconPosition="start" />
             <Tab label="Monetization Center" icon={<Coins size={18} />} iconPosition="start" />
           </Tabs>
         </Paper>
@@ -375,65 +441,276 @@ const AdminDashboard = () => {
               </TableContainer>
             )}
 
-            {/* Tab 1: Feedback Logs */}
+            {/* Tab 1: Feedback & Suggestions Logs */}
             {activeTab === 1 && (
+              <Stack spacing={4}>
+                {/* Standalone Feature Suggestions / Ideas */}
+                <Box>
+                  <Typography variant="h6" fontWeight={800} mb={2}>User Feature Suggestions & Ideas</Typography>
+                  {suggestions.length === 0 ? (
+                    <Paper sx={{ p: 3, bgcolor: "#1e1e1e", border: "1px solid #222", textAlign: "center", borderRadius: 3 }}>
+                      <Typography color="text.secondary">No feature suggestions submitted yet.</Typography>
+                    </Paper>
+                  ) : (
+                    <Grid container spacing={2}>
+                      {suggestions.map((s) => (
+                        <Grid item xs={12} key={s.id}>
+                          <Paper sx={{ p: 3, bgcolor: "#1e1e1e", border: "1px solid #222", borderRadius: 3 }}>
+                            <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5}>
+                              <Stack direction="row" alignItems="center" spacing={1.5}>
+                                <Avatar src={s.avatar} sx={{ width: 32, height: 32 }} />
+                                <Box>
+                                  <Typography variant="body2" fontWeight={700} sx={{ color: "#fff" }}>{s.username}</Typography>
+                                  <Typography variant="caption" color="text.secondary">User ID: {s.user_id}</Typography>
+                                </Box>
+                              </Stack>
+                              <Typography variant="caption" color="text.secondary">
+                                {s.submitted_at ? new Date(s.submitted_at).toLocaleString() : "..."}
+                              </Typography>
+                            </Stack>
+                            <Box sx={{ bgcolor: "#151515", p: 2, borderRadius: 2, border: "1px solid #222" }}>
+                              <Typography variant="body2" sx={{ color: "#fff", whiteSpace: "pre-wrap" }}>
+                                {s.suggestion}
+                              </Typography>
+                            </Box>
+                          </Paper>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  )}
+                </Box>
+
+                <Divider sx={{ borderColor: "#222" }} />
+
+                {/* Rating Feedbacks */}
+                <Box>
+                  <Typography variant="h6" fontWeight={800} mb={2}>General Feedback & Ratings</Typography>
+                  {feedbacks.length === 0 ? (
+                    <Paper sx={{ p: 3, bgcolor: "#1e1e1e", border: "1px solid #222", textAlign: "center", borderRadius: 3 }}>
+                      <Typography color="text.secondary">No rating feedback submissions yet.</Typography>
+                    </Paper>
+                  ) : (
+                    <Stack spacing={3}>
+                      {feedbacks.map((f) => (
+                        <Paper key={f.id} sx={{ p: 3, bgcolor: "#1e1e1e", border: "1px solid #222", borderRadius: 3 }}>
+                          <Stack spacing={2}>
+                            <Stack direction="row" alignItems="center" justifyContent="space-between">
+                              <Stack direction="row" alignItems="center" spacing={1.5}>
+                                <Avatar src={f.avatar} sx={{ width: 32, height: 32 }} />
+                                <Box>
+                                  <Typography variant="body2" fontWeight={700} sx={{ color: "#fff" }}>{f.username}</Typography>
+                                  <Typography variant="caption" color="text.secondary">User ID: {f.user_id}</Typography>
+                                </Box>
+                              </Stack>
+                              <Typography variant="caption" color="text.secondary">
+                                {f.submitted_at ? new Date(f.submitted_at).toLocaleString() : "..."}
+                              </Typography>
+                            </Stack>
+
+                            <Stack direction="row" spacing={0.5} alignItems="center">
+                              {[...Array(5)].map((_, idx) => (
+                                <Star
+                                  key={idx}
+                                  size={16}
+                                  weight={idx < f.rating ? "fill" : "regular"}
+                                  color="#FFD700"
+                                />
+                              ))}
+                              <Typography variant="body2" fontWeight={700} ml={1} sx={{ color: "#fff" }}>{f.rating}/5 Rating</Typography>
+                            </Stack>
+
+                            <Grid container spacing={2}>
+                              <Grid item xs={12} md={6}>
+                                <Typography variant="caption" color="primary.main" fontWeight={700} sx={{ textTransform: "uppercase" }}>What's Working Well</Typography>
+                                <Typography variant="body2" mt={0.5} sx={{ color: "#fff", bgcolor: "#151515", p: 1.5, borderRadius: 2, border: "1px solid #222" }}>
+                                  {f.working_well || "N/A"}
+                                </Typography>
+                              </Grid>
+                              <Grid item xs={12} md={6}>
+                                <Typography variant="caption" color="error.main" fontWeight={700} sx={{ textTransform: "uppercase" }}>What Needs to Change</Typography>
+                                <Typography variant="body2" mt={0.5} sx={{ color: "#fff", bgcolor: "#151515", p: 1.5, borderRadius: 2, border: "1px solid #222" }}>
+                                  {f.needs_change || "N/A"}
+                                </Typography>
+                              </Grid>
+                            </Grid>
+                          </Stack>
+                        </Paper>
+                      ))}
+                    </Stack>
+                  )}
+                </Box>
+              </Stack>
+            )}
+
+            {/* Tab 2: User Reports */}
+            {activeTab === 2 && (
               <Stack spacing={3}>
-                {feedbacks.length === 0 ? (
+                {reports.length === 0 ? (
                   <Paper sx={{ p: 4, bgcolor: "#1e1e1e", border: "1px solid #222", textAlign: "center", borderRadius: 3 }}>
-                    <Typography color="text.secondary">No feedback submissions yet.</Typography>
+                    <Typography color="text.secondary">No user reports submitted yet. Everything is quiet!</Typography>
                   </Paper>
                 ) : (
-                  feedbacks.map((f) => (
-                    <Paper key={f.id} sx={{ p: 3, bgcolor: "#1e1e1e", border: "1px solid #222", borderRadius: 3 }}>
-                      <Stack spacing={2}>
-                        <Stack direction="row" alignItems="center" justifyContent="space-between">
-                          <Stack direction="row" alignItems="center" spacing={1.5}>
-                            <Avatar src={f.avatar} sx={{ width: 32, height: 32 }} />
-                            <Box>
-                              <Typography variant="body2" fontWeight={700}>{f.username}</Typography>
-                              <Typography variant="caption" color="text.secondary">User ID: {f.user_id}</Typography>
-                            </Box>
-                          </Stack>
-                          <Typography variant="caption" color="text.secondary">
-                            {f.submitted_at ? new Date(f.submitted_at).toLocaleString() : "..."}
-                          </Typography>
-                        </Stack>
-
-                        <Stack direction="row" spacing={0.5} alignItems="center">
-                          {[...Array(5)].map((_, idx) => (
-                            <Star
-                              key={idx}
-                              size={16}
-                              weight={idx < f.rating ? "fill" : "regular"}
-                              color="#FFD700"
-                            />
-                          ))}
-                          <Typography variant="body2" fontWeight={700} ml={1}>{f.rating}/5 Rating</Typography>
-                        </Stack>
-
-                        <Grid container spacing={2}>
-                          <Grid item xs={12} md={6}>
-                            <Typography variant="caption" color="primary.main" fontWeight={700} sx={{ textTransform: "uppercase" }}>What's Working Well</Typography>
-                            <Typography variant="body2" mt={0.5} sx={{ color: "#fff", bgcolor: "#151515", p: 1.5, borderRadius: 2, border: "1px solid #222" }}>
-                              {f.working_well || "N/A"}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={12} md={6}>
-                            <Typography variant="caption" color="error.main" fontWeight={700} sx={{ textTransform: "uppercase" }}>What Needs to Change</Typography>
-                            <Typography variant="body2" mt={0.5} sx={{ color: "#fff", bgcolor: "#151515", p: 1.5, borderRadius: 2, border: "1px solid #222" }}>
-                              {f.needs_change || "N/A"}
-                            </Typography>
-                          </Grid>
-                        </Grid>
-                      </Stack>
-                    </Paper>
-                  ))
+                  <TableContainer component={Paper} sx={{ bgcolor: "#1e1e1e", border: "1px solid #222", borderRadius: 3 }}>
+                    <Table sx={{ minWidth: 650 }}>
+                      <TableHead sx={{ bgcolor: "#151515" }}>
+                        <TableRow>
+                          <TableCell sx={{ color: "#888", fontWeight: 700 }}>Reported User</TableCell>
+                          <TableCell sx={{ color: "#888", fontWeight: 700 }}>Reporter</TableCell>
+                          <TableCell sx={{ color: "#888", fontWeight: 700 }}>Reason / Details</TableCell>
+                          <TableCell sx={{ color: "#888", fontWeight: 700 }}>Date</TableCell>
+                          <TableCell align="right" sx={{ color: "#888", fontWeight: 700 }}>Actions</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {reports.map((r) => (
+                          <TableRow key={r.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                            <TableCell>
+                              <Stack direction="row" alignItems="center" spacing={1.5}>
+                                <Avatar src={r.reported_avatar} sx={{ width: 32, height: 32 }} />
+                                <Box>
+                                  <Typography variant="body2" fontWeight={700} sx={{ color: "#fff" }}>
+                                    {r.reported_username}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {r.reported_email} (ID: {r.reported_id})
+                                  </Typography>
+                                </Box>
+                              </Stack>
+                            </TableCell>
+                            <TableCell sx={{ color: "#fff" }}>
+                              {r.reporter_username} (ID: {r.reporter_id})
+                            </TableCell>
+                            <TableCell sx={{ color: "#f44336", fontWeight: 500 }}>
+                              {r.reason}
+                            </TableCell>
+                            <TableCell sx={{ color: "#aaa" }}>
+                              {new Date(r.created_at).toLocaleString()}
+                            </TableCell>
+                            <TableCell align="right">
+                              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  onClick={() => handleDismissReport(r.id)}
+                                  sx={{
+                                    borderColor: "#4CAF50",
+                                    color: "#4CAF50",
+                                    textTransform: "none",
+                                    "&:hover": { borderColor: "#45a049", bgcolor: "rgba(76,175,80,0.05)" }
+                                  }}
+                                >
+                                  Dismiss
+                                </Button>
+                                <Button
+                                  variant="contained"
+                                  size="small"
+                                  onClick={() => {
+                                    setUserToDelete({ id: r.reported_id, username: r.reported_username });
+                                    setDeleteUserOpen(true);
+                                  }}
+                                  sx={{
+                                    bgcolor: "#f44336",
+                                    color: "#fff",
+                                    textTransform: "none",
+                                    "&:hover": { bgcolor: "#d32f2f" }
+                                  }}
+                                >
+                                  Delete User
+                                </Button>
+                              </Stack>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 )}
               </Stack>
             )}
 
-            {/* Tab 2: Monetization Center */}
-            {activeTab === 2 && (
+            {/* Tab 3: Broadcast Updates & Announcements */}
+            {activeTab === 3 && (
+              <Paper sx={{ p: 4, bgcolor: "#1e1e1e", border: "1px solid #222", borderRadius: 3 }}>
+                <Stack spacing={4}>
+                  <Box>
+                    <Typography variant="h6" fontWeight={800} mb={1}>Send System Updates & Announcements</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Send a message that will show up as a direct support message from "Admin" on the user's chat screen.
+                    </Typography>
+                  </Box>
+
+                  <Stack spacing={3} sx={{ maxWidth: 600 }}>
+                    <Box sx={{ border: "1px solid #333", borderRadius: 2, p: 2, bgcolor: "#151515" }}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ display: "block", mb: 1.5 }}>
+                        RECIPIENT TARGET
+                      </Typography>
+                      <Stack direction="row" spacing={3}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", color: "#fff", fontSize: 14 }}>
+                          <input
+                            type="radio"
+                            name="broadcastTarget"
+                            checked={broadcastTarget === "all"}
+                            onChange={() => setBroadcastTarget("all")}
+                            style={{ accentColor: "#fff" }}
+                          />
+                          Broadcast to All Users
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", color: "#fff", fontSize: 14 }}>
+                          <input
+                            type="radio"
+                            name="broadcastTarget"
+                            checked={broadcastTarget === "single"}
+                            onChange={() => setBroadcastTarget("single")}
+                            style={{ accentColor: "#fff" }}
+                          />
+                          Send to Specific User
+                        </label>
+                      </Stack>
+                    </Box>
+
+                    {broadcastTarget === "single" && (
+                      <TextField
+                        fullWidth
+                        label="Target User's Username"
+                        placeholder="Enter exact username..."
+                        value={broadcastUsername}
+                        onChange={(e) => setBroadcastUsername(e.target.value)}
+                        variant="outlined"
+                        InputProps={{ style: { color: "#fff" } }}
+                        InputLabelProps={{ style: { color: "#888" } }}
+                        sx={{ "& .MuiOutlinedInput-root": { "& fieldset": { borderColor: "#333" }, "&:hover fieldset": { borderColor: "#555" } } }}
+                      />
+                    )}
+
+                    <TextField
+                      fullWidth
+                      multiline
+                      rows={5}
+                      label="Announcement / Message Content"
+                      placeholder="Type your announcement or update here..."
+                      value={broadcastMessage}
+                      onChange={(e) => setBroadcastMessage(e.target.value)}
+                      variant="outlined"
+                      InputProps={{ style: { color: "#fff" } }}
+                      InputLabelProps={{ style: { color: "#888" } }}
+                      sx={{ "& .MuiOutlinedInput-root": { "& fieldset": { borderColor: "#333" }, "&:hover fieldset": { borderColor: "#555" } } }}
+                    />
+
+                    <Button
+                      variant="contained"
+                      onClick={handleSendBroadcast}
+                      disabled={sendingBroadcast || !broadcastMessage.trim()}
+                      sx={{ bgcolor: "#fff", color: "#000", fontWeight: 700, "&:hover": { bgcolor: "#eee" }, alignSelf: "flex-start", px: 4, py: 1.2 }}
+                    >
+                      {sendingBroadcast ? <CircularProgress size={20} color="inherit" /> : "Send Update"}
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Paper>
+            )}
+
+            {/* Tab 4: Monetization Center */}
+            {activeTab === 4 && (
               <Paper sx={{ p: 4, bgcolor: "#1e1e1e", border: "1px solid #222", borderRadius: 3 }}>
                 <Stack spacing={4}>
                   <Box>

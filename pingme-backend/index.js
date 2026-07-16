@@ -2000,8 +2000,141 @@ app.get("/api/settings/monetization", async (req, res) => {
     }
 });
 
+// --- ADMIN BROADCAST & MESSAGING ---
+app.post("/api/admin/broadcast", verifyToken, isAdmin, async (req, res) => {
+    try {
+        const { target, username, message } = req.body;
+        if (!message) {
+            return res.status(400).json({ message: "Message is required." });
+        }
 
+        const adminId = req.user.id;
+        const [adminUser] = await db.query("SELECT username, avatar FROM users WHERE id = ?", [adminId]);
+        const adminName = adminUser[0]?.username || "Admin";
+        const adminAvatar = adminUser[0]?.avatar || "";
 
+        if (target === "single") {
+            if (!username) {
+                return res.status(400).json({ message: "Username is required for single target." });
+            }
+            const [users] = await db.query("SELECT id FROM users WHERE username = ?", [username]);
+            if (users.length === 0) {
+                return res.status(404).json({ message: "User not found." });
+            }
+            const targetUserId = users[0].id;
+            const [result] = await db.query(
+                "INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
+                [adminId, targetUserId, message]
+            );
+            const payload = {
+                id: result.insertId,
+                sender_id: adminId,
+                receiver_id: targetUserId,
+                message,
+                sender_name: adminName,
+                sender_avatar: adminAvatar,
+                self_destruct_seconds: 0,
+                created_at: new Date().toISOString()
+            };
+            io.to(`user_${targetUserId}`).emit("receive_message", payload);
+            return res.json({ message: "Message sent to user successfully." });
+        } else {
+            // Broadcast to all users
+            const [users] = await db.query("SELECT id FROM users WHERE id != ?", [adminId]);
+            for (const u of users) {
+                const [result] = await db.query(
+                    "INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
+                    [adminId, u.id, message]
+                );
+                const payload = {
+                    id: result.insertId,
+                    sender_id: adminId,
+                    receiver_id: u.id,
+                    message,
+                    sender_name: adminName,
+                    sender_avatar: adminAvatar,
+                    self_destruct_seconds: 0,
+                    created_at: new Date().toISOString()
+                };
+                io.to(`user_${u.id}`).emit("receive_message", payload);
+            }
+            return res.json({ message: `Broadcast message sent to ${users.length} users successfully.` });
+        }
+    } catch (err) {
+        console.error("Error sending broadcast:", err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// --- USER REPORTING ---
+app.post("/api/users/report", verifyToken, async (req, res) => {
+    try {
+        const { reported_id, reason } = req.body;
+        if (!reported_id || !reason) {
+            return res.status(400).json({ message: "Reported user ID and reason are required." });
+        }
+        if (Number(reported_id) === req.user.id) {
+            return res.status(400).json({ message: "You cannot report yourself." });
+        }
+        await db.createReport({
+            reporter_id: req.user.id,
+            reported_id: Number(reported_id),
+            reason
+        });
+        res.json({ message: "User reported successfully." });
+    } catch (err) {
+        console.error("Error creating report:", err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.get("/api/admin/reports", verifyToken, isAdmin, async (req, res) => {
+    try {
+        const reports = await db.getReports();
+        res.json(reports);
+    } catch (err) {
+        console.error("Error fetching reports:", err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.delete("/api/admin/reports/:id", verifyToken, isAdmin, async (req, res) => {
+    try {
+        await db.deleteReport(req.params.id);
+        res.json({ message: "Report dismissed/deleted." });
+    } catch (err) {
+        console.error("Error deleting report:", err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// --- USER SUGGESTIONS ---
+app.post("/api/suggestions/submit", verifyToken, async (req, res) => {
+    try {
+        const { suggestion } = req.body;
+        if (!suggestion) {
+            return res.status(400).json({ message: "Suggestion content is required." });
+        }
+        await db.createSuggestion({
+            user_id: req.user.id,
+            suggestion
+        });
+        res.json({ message: "Suggestion submitted successfully. Thank you!" });
+    } catch (err) {
+        console.error("Error submitting suggestion:", err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+app.get("/api/admin/suggestions", verifyToken, isAdmin, async (req, res) => {
+    try {
+        const suggestions = await db.getSuggestions();
+        res.json(suggestions);
+    } catch (err) {
+        console.error("Error fetching suggestions:", err);
+        res.status(500).json({ message: err.message });
+    }
+});
 
 app.get("/api/messages/unread/total", verifyToken, async (req, res) => {
     try {

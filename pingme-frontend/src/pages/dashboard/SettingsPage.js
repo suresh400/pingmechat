@@ -1,10 +1,11 @@
 import React, { useState, useRef } from "react";
 import {
     Box, Stack, Typography, Avatar, TextField, Button,
-    Switch, Alert, Snackbar, Paper, Grid, CircularProgress, IconButton, useMediaQuery, useTheme
+    Switch, Alert, Snackbar, Paper, Grid, CircularProgress, IconButton, useMediaQuery, useTheme,
+    Dialog
 } from "@mui/material";
 import {
-    User, Bell, Palette, Moon, Sun, SignOut, Lock, Eye, EyeSlash
+    User, Bell, Palette, Moon, Sun, SignOut, Lock, Eye, EyeSlash, Lightbulb
 } from "phosphor-react";
 import { useAuth } from "../../contexts/AuthContext";
 import useSettings from "../../hooks/useSettings";
@@ -36,6 +37,33 @@ const SettingsPage = () => {
     const [showConfirmPw, setShowConfirmPw] = useState(false);
     const [changingPassword, setChangingPassword] = useState(false);
     const [showEmail, setShowEmail] = useState(true); // privacy toggle
+    const [suggestionOpen, setSuggestionOpen] = useState(false);
+    const [suggestionText, setSuggestionText] = useState("");
+    const [submittingSuggestion, setSubmittingSuggestion] = useState(false);
+
+    const handleSubmitSuggestion = async () => {
+        if (!suggestionText.trim()) {
+            setSnackbar({ open: true, message: "Please type a suggestion.", severity: "error" });
+            return;
+        }
+        setSubmittingSuggestion(true);
+        try {
+            const res = await authFetch(`${API_BASE}/suggestions/submit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ suggestion: suggestionText }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message);
+            setSnackbar({ open: true, message: "Thank you! Your suggestion has been sent to the admin. ✓", severity: "success" });
+            setSuggestionText("");
+            setSuggestionOpen(false);
+        } catch (err) {
+            setSnackbar({ open: true, message: err.message, severity: "error" });
+        } finally {
+            setSubmittingSuggestion(false);
+        }
+    };
 
     const handleChangePassword = async () => {
         if (passwords.new.length < 8) {
@@ -387,9 +415,100 @@ const SettingsPage = () => {
                                     </Button>
                                 </Stack>
                             </Paper>
+
+                            {/* Feedback & Suggestions Section */}
+                            <Paper elevation={0} sx={{ p: 4, borderRadius: 4, border: "1px solid", borderColor: monochromaticStyles.border, bgcolor: monochromaticStyles.paper }}>
+                                <Typography variant="subtitle1" fontWeight={800} mb={2} sx={{ color: monochromaticStyles.primary, display: "flex", alignItems: "center", gap: 1 }}>
+                                    <Lightbulb size={20} weight="bold" /> Suggestions & Ideas
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: monochromaticStyles.secondary, display: "block", mb: 2 }}>
+                                    Have a feature in mind or something to improve? Submit your suggestion directly to our admin team.
+                                </Typography>
+                                <Button
+                                    fullWidth
+                                    variant="outlined"
+                                    onClick={() => setSuggestionOpen(true)}
+                                    sx={{
+                                        borderColor: monochromaticStyles.primary,
+                                        color: monochromaticStyles.primary,
+                                        borderRadius: 2, py: 1.2, fontWeight: 800, textTransform: "none",
+                                        "&:hover": { borderColor: monochromaticStyles.primary, bgcolor: "rgba(255,255,255,0.05)" }
+                                    }}
+                                >
+                                    Submit Feature Suggestion
+                                </Button>
+                            </Paper>
                         </Stack>
                     </Grid>
                 </Grid>
+
+                <Dialog
+                    open={suggestionOpen}
+                    onClose={() => setSuggestionOpen(false)}
+                    PaperProps={{
+                        sx: {
+                            bgcolor: monochromaticStyles.paper,
+                            border: "1px solid",
+                            borderColor: monochromaticStyles.border,
+                            borderRadius: 3,
+                            p: 2,
+                            maxWidth: 500,
+                            width: "100%",
+                            backgroundImage: "none"
+                        }
+                    }}
+                >
+                    <Box sx={{ p: 1 }}>
+                        <Typography variant="h6" fontWeight={800} sx={{ color: monochromaticStyles.primary, mb: 1 }}>
+                            Submit Suggestion / Feature Request
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: monochromaticStyles.secondary, mb: 3 }}>
+                            Your feedback helps us make PingMe better. Let us know what feature or improvement you'd like to see!
+                        </Typography>
+                        <TextField
+                            fullWidth
+                            multiline
+                            rows={4}
+                            variant="outlined"
+                            placeholder="Type your idea or feature request here..."
+                            value={suggestionText}
+                            onChange={(e) => setSuggestionText(e.target.value)}
+                            sx={{
+                                "& .MuiOutlinedInput-root": {
+                                    color: monochromaticStyles.primary,
+                                    "& fieldset": { borderColor: monochromaticStyles.border },
+                                    "&:hover fieldset": { borderColor: monochromaticStyles.primary },
+                                    "&.Mui-focused fieldset": { borderColor: monochromaticStyles.primary },
+                                }
+                            }}
+                        />
+                        <Stack direction="row" spacing={2} justifyContent="flex-end" mt={3}>
+                            <Button
+                                onClick={() => setSuggestionOpen(false)}
+                                sx={{ color: monochromaticStyles.secondary, textTransform: "none", fontWeight: 700 }}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="contained"
+                                onClick={handleSubmitSuggestion}
+                                disabled={submittingSuggestion || !suggestionText.trim()}
+                                sx={{
+                                    bgcolor: monochromaticStyles.primary,
+                                    color: isDark ? "#000" : "#fff",
+                                    borderRadius: 2,
+                                    px: 3,
+                                    fontWeight: 800,
+                                    textTransform: "none",
+                                    "&:hover": { bgcolor: monochromaticStyles.primary, opacity: 0.9 },
+                                    "&.Mui-disabled": { bgcolor: monochromaticStyles.secondary }
+                                }}
+                            >
+                                {submittingSuggestion ? <CircularProgress size={20} color="inherit" /> : "Submit"}
+                            </Button>
+                        </Stack>
+                    </Box>
+                </Dialog>
 
                 <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
                     <Alert severity={snackbar.severity} variant="filled" sx={{ borderRadius: 2, fontWeight: 600 }}>

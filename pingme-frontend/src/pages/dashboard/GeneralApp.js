@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box, Stack, Avatar, Typography, InputBase, IconButton,
   Divider, Tooltip, Chip, CircularProgress, Snackbar, Alert, Menu, MenuItem,
-  useMediaQuery, useTheme, Dialog, DialogContent, Rating, Button
+  useMediaQuery, useTheme, Dialog, DialogContent, Rating, Button, TextField
 } from "@mui/material";
 import {
   MagnifyingGlass, Phone, VideoCamera, Info, PaperPlaneRight, CaretLeft,
   Paperclip, Smiley, Prohibit, Trash, SignOut, X,
   PhoneIncoming, PhoneOutgoing, DotsThreeVertical, DownloadSimple, FileText, Check, Checks,
-  EnvelopeSimple, User, Hourglass, Palette, ListChecks, Star,
+  EnvelopeSimple, User, Hourglass, Palette, ListChecks, Star, Warning,
 } from "phosphor-react";
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
 import useSettings from "../../hooks/useSettings";
@@ -282,6 +282,18 @@ const GeneralApp = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
   const [contactProfile, setContactProfile] = useState(null); // full profile from API
   const [avatarOpen, setAvatarOpen] = useState(false);       // lightbox state
+
+  // User Reporting States
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("Spam");
+  const [reportDetails, setReportDetails] = useState("");
+  const [submittingReport, setSubmittingReport] = useState(false);
+
+  const handleOpenReport = () => {
+    setReportOpen(true);
+    setReportReason("Spam");
+    setReportDetails("");
+  };
 
   const fileInputRef = useRef(null);
 
@@ -645,6 +657,26 @@ const GeneralApp = () => {
     } catch (err) { setSnackbar({ open: true, message: err.message, severity: "error" }); }
   };
 
+  const handleSubmitReport = async () => {
+    setSubmittingReport(true);
+    try {
+      const fullReason = `${reportReason}${reportDetails ? ": " + reportDetails : ""}`;
+      const res = await authFetch(`${API_BASE}/users/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reported_id: activeContact.id, reason: fullReason })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setSnackbar({ open: true, message: "User reported to admin successfully. ✓", severity: "success" });
+      setReportOpen(false);
+    } catch (err) {
+      setSnackbar({ open: true, message: err.message, severity: "error" });
+    } finally {
+      setSubmittingReport(false);
+    }
+  };
+
   // ── Media permissions ───────────────────────────────────────────────────────
   const stopMedia = () => { if (mediaStream) { mediaStream.getTracks().forEach((t) => t.stop()); setMediaStream(null); } };
 
@@ -877,6 +909,9 @@ const GeneralApp = () => {
                   )}
                   <MenuItem onClick={() => { deleteChat(); handleCloseMenu(); }} sx={{ color: "#f44336", gap: 1.5 }}>
                     <Trash size={20} /> <Typography variant="body2" fontWeight={600}>Delete Chat</Typography>
+                  </MenuItem>
+                  <MenuItem onClick={() => { handleOpenReport(); handleCloseMenu(); }} sx={{ color: "#f44336", gap: 1.5 }}>
+                    <Warning size={20} /> <Typography variant="body2" fontWeight={600}>Report User</Typography>
                   </MenuItem>
                   <MenuItem onClick={() => { setShowContactInfo(!showContactInfo); handleCloseMenu(); }} sx={{ gap: 1.5 }}>
                     <Info size={20} /> <Typography variant="body2" fontWeight={600}>{showContactInfo ? "Hide" : "Show"} Contact Info</Typography>
@@ -1478,6 +1513,103 @@ const GeneralApp = () => {
             <Typography variant="caption" color="text.secondary">per month</Typography>
           </Box>
           <Button fullWidth variant="contained" sx={{ bgcolor: "text.primary", color: "background.paper", "&:hover": { bgcolor: "text.primary", opacity: 0.9 } }} onClick={() => { setUpgradeOpen(false); setSnackbar({ open: true, message: "Thank you for upgrading to Premium!", severity: "success" }); }}>Proceed to Payment</Button>
+        </Box>
+      </Dialog>
+
+      <Dialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            bgcolor: isDark ? "#1e1e1e" : "#fff",
+            border: "1px solid",
+            borderColor: isDark ? "#222" : "#eee",
+            borderRadius: 3,
+            p: 2,
+            backgroundImage: "none"
+          }
+        }}
+      >
+        <Box p={1}>
+          <Typography variant="h6" fontWeight={800} sx={{ color: "text.primary", mb: 1 }}>
+            Report User
+          </Typography>
+          <Typography variant="body2" sx={{ color: "text.secondary", mb: 3 }}>
+            Please select a reason for reporting <strong>{activeContact?.username}</strong>. Submitting false reports may result in account action.
+          </Typography>
+          
+          <Stack spacing={2.5}>
+            <TextField
+              select
+              fullWidth
+              label="Select Reason"
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              SelectProps={{ native: true }}
+              variant="outlined"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  color: "text.primary",
+                  "& fieldset": { borderColor: isDark ? "#333" : "#ccc" },
+                  "&:hover fieldset": { borderColor: "text.primary" },
+                  "&.Mui-focused fieldset": { borderColor: "text.primary" },
+                }
+              }}
+            >
+              <option value="Spam">Spam / Advertising</option>
+              <option value="Harassment">Harassment / Bullying</option>
+              <option value="Inappropriate Profile">Inappropriate Profile Details (Avatar/Bio)</option>
+              <option value="Other">Other / Violation of Terms</option>
+            </TextField>
+
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Additional Details (Optional)"
+              variant="outlined"
+              placeholder="Provide more context..."
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  color: "text.primary",
+                  "& fieldset": { borderColor: isDark ? "#333" : "#ccc" },
+                  "&:hover fieldset": { borderColor: "text.primary" },
+                  "&.Mui-focused fieldset": { borderColor: "text.primary" },
+                }
+              }}
+            />
+
+            <Stack direction="row" spacing={2} justifyContent="flex-end" mt={2}>
+              <Button
+                onClick={() => setReportOpen(false)}
+                sx={{ color: "text.secondary", textTransform: "none", fontWeight: 700 }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleSubmitReport}
+                disabled={submittingReport}
+                sx={{
+                  bgcolor: "#f44336",
+                  color: "#fff",
+                  borderRadius: 2,
+                  px: 3,
+                  fontWeight: 800,
+                  textTransform: "none",
+                  "&:hover": { bgcolor: "#d32f2f" },
+                  "&.Mui-disabled": { bgcolor: "text.secondary" }
+                }}
+              >
+                {submittingReport ? <CircularProgress size={20} color="inherit" /> : "Submit Report"}
+              </Button>
+            </Stack>
+          </Stack>
         </Box>
       </Dialog>
     </Stack>
