@@ -62,36 +62,7 @@ const sendMailCustom = async ({ to, subject, html }) => {
         return { messageId: data.id };
     }
 
-    // 3. Try AWS SES HTTP API (Port 443, safe for Render free tier)
-    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-        console.log(`[Mailer] Sending email to ${to} via AWS SES API...`);
-        try {
-            const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
-            const ses = new SESClient({
-                region: process.env.AWS_REGION || "us-east-1",
-                credentials: {
-                    accessKeyId: process.env.AWS_ACCESS_KEY_ID.trim(),
-                    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY.trim(),
-                },
-            });
-            const senderEmail = process.env.AWS_SES_SENDER || process.env.SMTP_USER || "support@pingsme.in";
-            const command = new SendEmailCommand({
-                Source: `PingMe <${senderEmail.trim()}>`,
-                Destination: { ToAddresses: [to] },
-                Message: {
-                    Subject: { Data: subject },
-                    Body: { Html: { Data: html } },
-                },
-            });
-            const data = await ses.send(command);
-            console.log(`[Mailer] ✅ Email sent via AWS SES! MessageId: ${data.MessageId}`);
-            return { messageId: data.MessageId };
-        } catch (sesErr) {
-            throw new Error(`AWS SES API error: ${sesErr.message}`);
-        }
-    }
-
-    // 4. Fallback to standard SMTP (which will work locally, or on paid cloud servers)
+    // 3. Fallback to standard SMTP (which will work locally, or on paid cloud servers)
     console.log(`[Mailer] Sending email to ${to} via SMTP...`);
     const transporter = await getTransporter();
     const info = await transporter.sendMail({

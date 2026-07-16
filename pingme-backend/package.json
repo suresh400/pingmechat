@@ -11,7 +11,6 @@
   "license": "ISC",
   "description": "PingMe chat backend — deploy to Render",
   "dependencies": {
-    "@aws-sdk/client-ses": "^3.967.0",
     "agora-access-token": "^2.0.4",
     "agora-token": "^2.0.5",
     "bcryptjs": "^3.0.3",

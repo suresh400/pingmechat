@@ -7,7 +7,7 @@ import {
 } from "@mui/material";
 import {
   Trash, ChartBar, Users, ChatCircleDots, ShieldCheck,
-  Sliders, Star, SignOut, StarHalf, Megaphone, Coins
+  Star, SignOut, Megaphone, Coins
 } from "phosphor-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -80,6 +80,7 @@ const AdminDashboard = () => {
     if (isAdmin) {
       fetchDashboardData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
   // Handle admin authentication

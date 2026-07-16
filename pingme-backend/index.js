@@ -883,54 +883,11 @@ app.get("/api/auth/test-smtp", async (req, res) => {
         }
     }
 
-    // 3. Test AWS SES API
-    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
-        try {
-            console.log(`[Diagnostic] Testing AWS SES API...`);
-            const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
-            const ses = new SESClient({
-                region: process.env.AWS_REGION || "us-east-1",
-                credentials: {
-                    accessKeyId: process.env.AWS_ACCESS_KEY_ID.trim(),
-                    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY.trim(),
-                },
-            });
-            const senderEmail = process.env.AWS_SES_SENDER || user || "support@pingsme.in";
-            const command = new SendEmailCommand({
-                Source: `PingMe Diagnostics <${senderEmail.trim()}>`,
-                Destination: { ToAddresses: [user || "supportpingmechat@gmail.com"] },
-                Message: {
-                    Subject: { Data: "PingMe AWS SES Diagnostics Success" },
-                    Body: { Html: { Data: "AWS SES API diagnostics verified successfully." } },
-                },
-            });
-            const data = await ses.send(command);
-            return res.json({
-                success: true,
-                message: "AWS SES API is configured and verified successfully! Test email sent.",
-                details: {
-                    provider: "AWS SES",
-                    messageId: data.MessageId
-                }
-            });
-        } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: `AWS SES API verification failed: ${err.message}`,
-                details: {
-                    provider: "AWS SES",
-                    errorName: err.name,
-                    errorStack: err.stack
-                }
-            });
-        }
-    }
-
-    // 4. Test standard SMTP
+    // 3. Test standard SMTP
     if (!user || !pass) {
         return res.status(400).json({
             success: false,
-            message: "No email providers configured. Please set RESEND_API_KEY, AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, or SMTP credentials (SMTP_USER and SMTP_PASS) in the environment variables."
+            message: "No email providers configured. Please set RESEND_API_KEY or SMTP credentials (SMTP_USER and SMTP_PASS) in the environment variables."
         });
     }
 
@@ -1036,7 +993,7 @@ app.post("/api/auth/register", validateRegister, async (req, res) => {
             console.log(`[REGISTRATION OTP] Code for ${normalizedEmail}: ${newOtp}`);
 
             let message = "A verification OTP has been sent to your email. Please enter it to complete registration.";
-            if (process.env.SMTP_USER || process.env.RESEND_API_KEY || process.env.AWS_ACCESS_KEY_ID) {
+            if (process.env.SMTP_USER || process.env.RESEND_API_KEY) {
                 // Send email asynchronously in the background so the request is fast and lag-free
                 sendVerificationEmail(normalizedEmail, username, newOtp).catch((emailErr) => {
                     console.error("Failed to send verification email asynchronously:", emailErr.message);
@@ -1329,7 +1286,7 @@ app.post("/api/auth/forgot-password", validateForgotPassword, async (req, res) =
         console.log(`[FORGOT PASSWORD OTP] Code for ${normalizedEmail}: ${otp}`);
 
         let message = "If this email is registered, an OTP has been sent.";
-        if (process.env.SMTP_USER || process.env.RESEND_API_KEY || process.env.AWS_ACCESS_KEY_ID) {
+        if (process.env.SMTP_USER || process.env.RESEND_API_KEY) {
             sendOTPEmail(normalizedEmail, user.username, otp)
                 .then(() => console.log(`[forgot-password] ✅ OTP email sent successfully to ${normalizedEmail}`))
                 .catch((emailErr) => console.error(`[forgot-password] ❌ Failed to send email to ${normalizedEmail}:`, emailErr.message));
@@ -1431,7 +1388,7 @@ app.post("/api/auth/resend-otp", validateResendOtp, async (req, res) => {
         console.log(`[RESEND OTP] Code for ${normalizedEmail}: ${otp}`);
 
         let message = "A new OTP has been sent to your email.";
-        if (process.env.SMTP_USER || process.env.RESEND_API_KEY || process.env.AWS_ACCESS_KEY_ID) {
+        if (process.env.SMTP_USER || process.env.RESEND_API_KEY) {
             sendOTPEmail(normalizedEmail, user.username, otp)
                 .then(() => console.log(`[resend-otp] ✅ OTP email sent successfully to ${normalizedEmail}`))
                 .catch((emailErr) => console.error(`[resend-otp] ❌ Failed to send email to ${normalizedEmail}:`, emailErr.message));

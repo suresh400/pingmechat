@@ -2,7 +2,6 @@ import { Suspense, lazy } from "react";
 import { Navigate, useRoutes, useLocation } from "react-router-dom";
 import DashboardLayout from "../layouts/dashboard";
 import { useAuth } from "../contexts/AuthContext";
-import { DEFAULT_PATH } from "../config";
 import LoadingScreen from "../components/LoadingScreen";
 
 // Static file extensions that should never be handled by React Router
@@ -28,11 +27,6 @@ const Loadable = (Component) => (props) => (
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? children : <Navigate to="/" replace />;
-};
-
-const GuestRoute = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-  return !isAuthenticated ? children : <Navigate to={DEFAULT_PATH} replace />;
 };
 
 export default function Router() {
@@ -74,6 +68,3 @@ const SettingsPage = Loadable(lazy(() => import("../pages/dashboard/SettingsPage
 const TasksPage = Loadable(lazy(() => import("../pages/dashboard/TasksPage")));
 const AdminDashboard = Loadable(lazy(() => import("../pages/dashboard/AdminDashboard")));
 const Page404 = Loadable(lazy(() => import("../pages/Page404")));
-const ForgotPasswordPage = Loadable(lazy(() => import("../pages/auth/ForgotPasswordPage")));
-const OTPVerificationPage = Loadable(lazy(() => import("../pages/auth/OTPVerificationPage")));
-const ResetPasswordPage = Loadable(lazy(() => import("../pages/auth/ResetPasswordPage")));
