@@ -1263,7 +1263,8 @@ app.post("/api/auth/supabase-login", async (req, res) => {
 
         res.json({
             token: localToken,
-            user: { id: user.id, username: user.username, email: user.email, avatar: user.avatar }
+            user: { id: user.id, username: user.username, email: user.email, avatar: user.avatar },
+            isNewUser: rows.length === 0
         });
     } catch (err) {
         console.error("Error during Supabase authentication exchange:", err);
