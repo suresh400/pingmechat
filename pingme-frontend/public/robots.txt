@@ -1,6 +1,24 @@
 # https://www.robotstxt.org/robotstxt.html
+
 User-agent: *
 Allow: /
+
+# Block auth pages — these all 301-redirect to "/" and should not be crawled
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /verify-otp
+Disallow: /reset-password
+
+# Block private dashboard routes — require login
+Disallow: /app
+Disallow: /groups
+Disallow: /calls
+Disallow: /tasks
+Disallow: /settings
+Disallow: /admin
+
+# Block backend API
 Disallow: /api/
 
 Sitemap: https://pingsme.in/sitemap.xml
