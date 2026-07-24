@@ -1,13 +1,39 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Box, Stack, Typography, TextField, Button, IconButton,
-  Alert, CircularProgress, Link, Avatar
+  Alert, CircularProgress, Link, Avatar, Select, MenuItem
 } from "@mui/material";
 import { ChatCircleDots, X, CheckCircle, XCircle, Camera, UploadSimple } from "phosphor-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { API_BASE } from "../constants";
 import "./AuthModal.css";
+
+const COUNTRY_CODES = [
+  { code: "+91", country: "India", flag: "🇮🇳" },
+  { code: "+1", country: "United States / Canada", flag: "🇺🇸" },
+  { code: "+44", country: "United Kingdom", flag: "🇬🇧" },
+  { code: "+61", country: "Australia", flag: "🇦🇺" },
+  { code: "+65", country: "Singapore", flag: "🇸🇬" },
+  { code: "+971", country: "UAE", flag: "🇦🇪" },
+  { code: "+966", country: "Saudi Arabia", flag: "🇸🇦" },
+  { code: "+49", country: "Germany", flag: "🇩🇪" },
+  { code: "+33", country: "France", flag: "🇫🇷" },
+  { code: "+81", country: "Japan", flag: "🇯🇵" },
+  { code: "+55", country: "Brazil", flag: "🇧🇷" },
+  { code: "+52", country: "Mexico", flag: "🇲🇽" },
+  { code: "+27", country: "South Africa", flag: "🇿🇦" },
+  { code: "+977", country: "Nepal", flag: "🇳🇵" },
+  { code: "+880", country: "Bangladesh", flag: "🇧🇩" },
+  { code: "+92", country: "Pakistan", flag: "🇵🇰" },
+  { code: "+94", country: "Sri Lanka", flag: "🇱🇱" },
+  { code: "+62", country: "Indonesia", flag: "🇮🇩" },
+  { code: "+60", country: "Malaysia", flag: "🇲🇾" },
+  { code: "+63", country: "Philippines", flag: "🇵🇭" },
+  { code: "+39", country: "Italy", flag: "🇮🇹" },
+  { code: "+34", country: "Spain", flag: "🇪🇸" },
+  { code: "+31", country: "Netherlands", flag: "🇳🇱" },
+];
 
 export default function AuthModal({ open, onClose, initialMode = "login" }) {
   const navigate = useNavigate();
@@ -17,6 +43,8 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
   // Flow control steps: "phone" | "otp" | "existing_user" | "new_user_step1" | "new_user_step2"
   const [step, setStep] = useState("phone");
 
+  const [countryCode, setCountryCode] = useState("+91");
+  const [subscriberNumber, setSubscriberNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
@@ -54,6 +82,8 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
   // Reset modal state when opened/closed
   useEffect(() => {
     if (!open) {
+      setCountryCode("+91");
+      setSubscriberNumber("");
       setPhone("");
       setOtp("");
       setStep("phone");
@@ -99,24 +129,35 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
     if (e) e.preventDefault();
     setError("");
     setSuccess("");
-    
-    if (!phone.trim()) {
-      setError("Phone number is required.");
+
+    // Strip non-digit characters from subscriber number
+    const cleanDigits = subscriberNumber.replace(/\D/g, "");
+    if (!cleanDigits) {
+      setError("Please enter a valid mobile number.");
       return;
     }
 
-    if (!phone.trim().startsWith("+")) {
-      setError("Phone number must include country code (e.g. +1234567890).");
+    if (cleanDigits.length < 6) {
+      setError("Phone number is too short. Please enter a valid number.");
       return;
     }
+
+    // Format strictly as E.164: +[country_code][number]
+    const fullPhone = `${countryCode}${cleanDigits}`;
+    setPhone(fullPhone);
 
     setLoading(true);
     try {
-      await sendOtp(phone);
+      await sendOtp(fullPhone);
       setStep("otp");
-      setSuccess(`A verification code has been sent to ${phone}.`);
+      setSuccess(`A 6-digit verification code has been sent to ${fullPhone}.`);
     } catch (err) {
-      setError(err.message || "Failed to send OTP code.");
+      console.error("Failed to send OTP:", err);
+      let errMsg = err.message || "Failed to send verification code.";
+      if (errMsg.toLowerCase().includes("sms provider") || errMsg.toLowerCase().includes("provider")) {
+        errMsg = "SMS Provider error. If using Supabase, please verify that Phone Auth and Twilio/SMS provider settings are configured in the Supabase Dashboard.";
+      }
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
@@ -238,11 +279,11 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
       <Box
         onClick={(e) => e.stopPropagation()}
         sx={{
-          width: 440,
+          width: 460,
           maxWidth: "92vw",
           position: "relative",
           borderRadius: "24px",
-          background: "rgba(15, 15, 15, 0.9)",
+          background: "rgba(15, 15, 15, 0.92)",
           border: "1px solid rgba(255, 255, 255, 0.1)",
           boxShadow: "0 30px 70px rgba(0, 0, 0, 0.85)",
           p: "40px 32px",
@@ -277,37 +318,83 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
         {error && <Alert severity="error" sx={{ mb: 2.5, borderRadius: 2 }}>{error}</Alert>}
         {success && <Alert severity="success" sx={{ mb: 2.5, borderRadius: 2 }}>{success}</Alert>}
 
-        {/* ── STEP 1: PHONE NUMBER ── */}
+        {/* ── STEP 1: PHONE NUMBER WITH COUNTRY CODE SELECTOR ── */}
         {step === "phone" && (
           <form onSubmit={handleSendCode}>
             <Stack spacing={2.5}>
-              <Typography variant="body2" align="center" sx={{ color: "rgba(255, 255, 255, 0.6)", mb: 1 }}>
+              <Typography variant="body2" align="center" sx={{ color: "rgba(255, 255, 255, 0.6)", mb: 0.5 }}>
                 Sign in or Register with Phone Number
               </Typography>
-              <TextField
-                label="Phone Number"
-                name="phone"
-                type="tel"
-                fullWidth
-                required
-                placeholder="+1234567890"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                variant="outlined"
-                size="small"
-                helperText="Include country code (e.g., +15550199)"
-                FormHelperTextProps={{ sx: { color: "rgba(255,255,255,0.4)" } }}
-                sx={{
-                  "& .MuiInputBase-input": { color: "#fff" },
-                  "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
-                  "& .MuiInputLabel-root.Mui-focused": { color: "#fff" },
-                  "& .MuiOutlinedInput-root": {
-                    "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
-                    "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-                    "&.Mui-focused fieldset": { borderColor: "#fff" },
-                  },
-                }}
-              />
+
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                {/* Country Code Dropdown Menu with Flags */}
+                <Select
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  size="small"
+                  MenuProps={{
+                    PaperProps: {
+                      sx: {
+                        bgcolor: "#141414",
+                        color: "#fff",
+                        maxHeight: 280,
+                        border: "1px solid rgba(255, 255, 255, 0.15)",
+                        "& .MuiMenuItem-root": {
+                          fontSize: 14,
+                          py: 1,
+                          "&:hover": { bgcolor: "rgba(255, 255, 255, 0.08)" },
+                          "&.Mui-selected": { bgcolor: "rgba(255, 255, 255, 0.15)" }
+                        }
+                      }
+                    }
+                  }}
+                  sx={{
+                    minWidth: 120,
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    bgcolor: "rgba(255, 255, 255, 0.03)",
+                    "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.15)" },
+                    "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.3)" },
+                    "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#fff" },
+                    "& .MuiSvgIcon-root": { color: "#fff" }
+                  }}
+                >
+                  {COUNTRY_CODES.map((c) => (
+                    <MenuItem key={`${c.code}-${c.country}`} value={c.code}>
+                      <span style={{ marginRight: 8, fontSize: 16 }}>{c.flag}</span>
+                      <span>{c.code}</span>
+                    </MenuItem>
+                  ))}
+                </Select>
+
+                {/* Subscriber Phone Input */}
+                <TextField
+                  label="Mobile Number"
+                  name="subscriberNumber"
+                  type="tel"
+                  fullWidth
+                  required
+                  placeholder="9876543210"
+                  value={subscriberNumber}
+                  onChange={(e) => setSubscriberNumber(e.target.value)}
+                  variant="outlined"
+                  size="small"
+                  helperText={`Full format: ${countryCode}${subscriberNumber.replace(/\D/g, "")}`}
+                  FormHelperTextProps={{ sx: { color: "rgba(255,255,255,0.4)", fontSize: 11 } }}
+                  sx={{
+                    "& .MuiInputBase-input": { color: "#fff", fontSize: 15, fontWeight: 600 },
+                    "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
+                    "& .MuiInputLabel-root.Mui-focused": { color: "#fff" },
+                    "& .MuiOutlinedInput-root": {
+                      "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
+                      "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
+                      "&.Mui-focused fieldset": { borderColor: "#fff" },
+                    },
+                  }}
+                />
+              </Stack>
+
               <Button
                 type="submit"
                 variant="contained"
@@ -321,6 +408,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
                   fontWeight: 800,
                   textTransform: "none",
                   fontSize: 15,
+                  mt: 1,
                   "&:hover": { backgroundColor: "#e5e5e5" },
                 }}
               >
