@@ -1,17 +1,23 @@
 // Backend URL configuration
 // In development: uses .env.development → REACT_APP_BACKEND_URL=http://localhost:5000
-// In production:  set REACT_APP_BACKEND_URL in Vercel dashboard
-// Fallback is always localhost:5000 to ensure local dev always works
+// In production:  uses https://pingme-backend.onrender.com
 const getBackendUrl = () => {
   const envUrl = process.env.REACT_APP_BACKEND_URL;
-  if (envUrl) return envUrl;
+  const isBrowser = typeof window !== "undefined" && window.location && window.location.hostname;
+  const isLocalhost = isBrowser && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
-  if (typeof window !== "undefined" && window.location && window.location.hostname) {
-    const hostname = window.location.hostname;
-    if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
-      return `http://${hostname}:5000`;
+  // If in browser on a production domain, strictly ensure HTTPS production backend URL
+  if (isBrowser && !isLocalhost) {
+    if (envUrl && !envUrl.includes("localhost")) {
+      return envUrl.replace(/\/$/, "");
     }
+    return "https://pingme-backend.onrender.com";
   }
+
+  if (envUrl) {
+    return envUrl.replace(/\/$/, "");
+  }
+
   return "http://localhost:5000";
 };
 
