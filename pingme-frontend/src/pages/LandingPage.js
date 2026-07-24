@@ -2,10 +2,11 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import ScrollStack, { ScrollStackItem } from "../components/ScrollStack";
-import LightRays from "../components/LightRays";
-import AuthModal from "../components/AuthModal";
 import CardNav from "../components/CardNav";
 import logoCustom from "../assets/logo-custom.png";
+
+const LightRays = React.lazy(() => import("../components/LightRays"));
+const AuthModal = React.lazy(() => import("../components/AuthModal"));
 
 const DARK_BG = "#000000";
 const LIGHT_TEXT = "#FFFFFF";
@@ -309,6 +310,13 @@ export default function LandingPage() {
   // Auth modal state triggers
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState("login");
+  const [showRays, setShowRays] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth > 768) {
+      setShowRays(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (location.state?.authMode) {
@@ -385,20 +393,24 @@ export default function LandingPage() {
       {/* ── HERO ── */}
       <section id="hero" style={styles.hero}>
         <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
-          <LightRays
-            raysOrigin="top-center"
-            raysColor="#ffffff"
-            raysSpeed={1.0}
-            lightSpread={0.6}
-            rayLength={2.5}
-            followMouse={true}
-            mouseInfluence={0.15}
-            noiseAmount={0.02}
-            distortion={0.05}
-            pulsating={true}
-            fadeDistance={1.2}
-            saturation={0.5}
-          />
+          {showRays && (
+            <React.Suspense fallback={<div />}>
+              <LightRays
+                raysOrigin="top-center"
+                raysColor="#ffffff"
+                raysSpeed={1.0}
+                lightSpread={0.6}
+                rayLength={2.5}
+                followMouse={true}
+                mouseInfluence={0.15}
+                noiseAmount={0.02}
+                distortion={0.05}
+                pulsating={true}
+                fadeDistance={1.2}
+                saturation={0.5}
+              />
+            </React.Suspense>
+          )}
         </div>
         <div style={styles.heroBg} />
         <div style={{ ...styles.badge, position: "relative", zIndex: 2 }}>✨ Real-time messaging reimagined</div>
@@ -664,11 +676,15 @@ export default function LandingPage() {
       </footer>
 
       {/* Auth Modal overlay with card rotating flip animations */}
-      <AuthModal
-        open={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        initialMode={authMode}
-      />
+      {showAuthModal && (
+        <React.Suspense fallback={<div />}>
+          <AuthModal
+            open={showAuthModal}
+            onClose={() => setShowAuthModal(false)}
+            initialMode={authMode}
+          />
+        </React.Suspense>
+      )}
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import { Suspense, lazy } from "react";
 import { Navigate, useRoutes, useLocation } from "react-router-dom";
-import DashboardLayout from "../layouts/dashboard";
 import { useAuth } from "../contexts/AuthContext";
 import LoadingScreen from "../components/LoadingScreen";
+
+const DashboardLayout = Loadable(lazy(() => import("../layouts/dashboard")));
 
 // Static file extensions that should never be handled by React Router
 const STATIC_EXTENSIONS = /\.(xml|txt|json|ico|png|jpg|jpeg|svg|webp|woff|woff2|ttf|eot|css|js|map|pdf)$/i;
