@@ -126,6 +126,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
       >
         {/* Close Button */}
         <IconButton
+          aria-label="Close"
           onClick={onClose}
           sx={{ position: "absolute", top: 16, right: 16, color: "rgba(255, 255, 255, 0.5)", "&:hover": { color: "#fff" } }}
         >
@@ -144,7 +145,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
           >
             <ChatCircleDots size={26} color="#fff" weight="fill" />
           </Box>
-          <Typography variant="h5" fontWeight={900} sx={{ color: "#fff", letterSpacing: 0.5, textTransform: "uppercase" }}>PingsMe</Typography>
+          <Typography variant="h5" component="p" fontWeight={900} sx={{ color: "#fff", letterSpacing: 0.5, textTransform: "uppercase" }}>PingsMe</Typography>
           <Typography variant="body2" sx={{ color: "rgba(255, 255, 255, 0.5)" }}>
             {otpSent ? "Verify OTP code" : "Sign in with Phone"}
           </Typography>

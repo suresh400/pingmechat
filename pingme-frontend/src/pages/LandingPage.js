@@ -9,7 +9,7 @@ import logoCustom from "../assets/logo-custom.png";
 
 const DARK_BG = "#000000";
 const LIGHT_TEXT = "#FFFFFF";
-const GRAY_TEXT = "#A3A3A3";
+const GRAY_TEXT = "#D1D5DB";
 const GRAY_BORDER = "rgba(255, 255, 255, 0.08)";
 const GRAY_BORDER_HOVER = "rgba(255, 255, 255, 0.3)";
 const CARD_BG = "rgba(255, 255, 255, 0.03)";
@@ -607,7 +607,7 @@ export default function LandingPage() {
               <strong style={{ color: WHITE_ACCENT }}>Third-party Services:</strong> PingsMe uses Agora for video calls and SMTP for emails. These services have their own privacy policies.
             </p>
             <br />
-            <p style={{ ...styles.legalText, color: "rgba(255,255,255,0.3)", fontSize: 12 }}>Last updated: July 2026</p>
+            <p style={{ ...styles.legalText, color: "rgba(255,255,255,0.7)", fontSize: 12 }}>Last updated: July 2026</p>
           </div>
 
           {/* Terms of Service */}
@@ -637,7 +637,7 @@ export default function LandingPage() {
               <strong style={{ color: WHITE_ACCENT }}>Limitation of Liability:</strong> PingsMe is provided "as is" without warranties of any kind. We are not liable for any damages arising from use of the service.
             </p>
             <br />
-            <p style={{ ...styles.legalText, color: "rgba(255,255,255,0.3)", fontSize: 12 }}>Last updated: July 2026</p>
+            <p style={{ ...styles.legalText, color: "rgba(255,255,255,0.7)", fontSize: 12 }}>Last updated: July 2026</p>
           </div>
         </div>
       </section>
@@ -650,15 +650,15 @@ export default function LandingPage() {
         </div>
         <div style={styles.footerLinks}>
           {[["Features", "features"], ["How it Works", "howitworks"], ["FAQ", "faq"], ["Contact", "contact"], ["Privacy", "legal"], ["Terms", "legal"]].map(([label, id]) => (
-            <span key={label} style={{ color: "rgba(255,255,255,0.45)", fontSize: 14, cursor: "pointer", transition: "color 0.2s" }}
+            <span key={label} style={{ color: "rgba(255,255,255,0.75)", fontSize: 14, cursor: "pointer", transition: "color 0.2s" }}
               onClick={() => scrollTo(id)}
               onMouseEnter={e => e.target.style.color = "#fff"}
-              onMouseLeave={e => e.target.style.color = "rgba(255,255,255,0.45)"}>
+              onMouseLeave={e => e.target.style.color = "rgba(255,255,255,0.75)"}>
               {label}
             </span>
           ))}
         </div>
-        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 13 }}>
+        <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
           © {new Date().getFullYear()} PingsMe. All rights reserved.
         </div>
       </footer>

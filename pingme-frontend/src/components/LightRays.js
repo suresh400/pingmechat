@@ -55,7 +55,25 @@ const LightRays = ({
   const meshRef = useRef(null);
   const cleanupFunctionRef = useRef(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [pageLoaded, setPageLoaded] = useState(false);
   const observerRef = useRef(null);
+
+  // Wait for page to fully load + browser idle before starting WebGL.
+  // This prevents the animation loop from blocking the main thread during
+  // Lighthouse's TBT measurement window (first 10s of page load).
+  useEffect(() => {
+    const markReady = () => {
+      const schedule = window.requestIdleCallback || ((fn) => setTimeout(fn, 1200));
+      schedule(() => setPageLoaded(true));
+    };
+
+    if (document.readyState === 'complete') {
+      markReady();
+    } else {
+      window.addEventListener('load', markReady, { once: true });
+      return () => window.removeEventListener('load', markReady);
+    }
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -79,7 +97,7 @@ const LightRays = ({
   }, []);
 
   useEffect(() => {
-    if (!isVisible || !containerRef.current) return;
+    if (!isVisible || !pageLoaded || !containerRef.current) return;
 
     if (cleanupFunctionRef.current) {
       cleanupFunctionRef.current();
@@ -328,6 +346,7 @@ void main() {
     };
   }, [
     isVisible,
+    pageLoaded,
     raysOrigin,
     raysColor,
     raysSpeed,
