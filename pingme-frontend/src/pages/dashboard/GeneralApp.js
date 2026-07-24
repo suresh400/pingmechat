@@ -8,7 +8,7 @@ import {
   MagnifyingGlass, Phone, VideoCamera, Info, PaperPlaneRight, CaretLeft,
   Paperclip, Smiley, Prohibit, Trash, SignOut, X,
   PhoneIncoming, PhoneOutgoing, DotsThreeVertical, DownloadSimple, FileText, Check, Checks,
-  EnvelopeSimple, User, Hourglass, Palette, ListChecks, Star, Warning,
+  EnvelopeSimple, User, Hourglass, Palette, ListChecks, Star, Warning, ArrowsOut
 } from "phosphor-react";
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
 import useSettings from "../../hooks/useSettings";
@@ -20,6 +20,7 @@ import WhiteboardDialog from "../../components/WhiteboardDialog";
 import ConvertToTaskDialog from "../../components/ConvertToTaskDialog";
 import logoCustom from "../../assets/logo-custom.png";
 import ImageLightbox from "../../components/ImageLightbox";
+import MessageToast from "../../components/MessageToast";
 
 import { API_BASE, BASE_URL } from "../../constants";
 
@@ -260,6 +261,7 @@ const GeneralApp = () => {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [taskMessageText, setTaskMessageText] = useState("");
   const [lightboxImage, setLightboxImage] = useState(null);
+  const [messagePopup, setMessagePopup] = useState({ open: false, title: "", message: "", avatar: "", senderId: null });
 
   const messagesEndRef = useRef(null);
   const [blockedUsers, setBlockedUsers] = useState(new Set());
@@ -441,8 +443,15 @@ const GeneralApp = () => {
             if (fetchTotalUnread) fetchTotalUnread();
           }, 100);
         }
-      } else if (msg.receiver_id === currentUser?.id) {
+      } else if (Number(msg.receiver_id) === Number(currentUser?.id)) {
         showNotification(`New message from ${msg.sender_name}`, msg.message);
+        setMessagePopup({
+          open: true,
+          title: msg.sender_name || "New Message",
+          message: msg.message,
+          avatar: msg.sender_avatar,
+          senderId: msg.sender_id
+        });
         fetchActiveConversations(); // Update sidebar
       }
     };
@@ -1036,6 +1045,21 @@ const GeneralApp = () => {
                                     return (
                                       <Box sx={{ position: "relative", borderRadius: 1, overflow: "hidden", mb: 0.5 }}>
                                         <video src={getFileUrl(messageText)} controls style={{ width: "100%", borderRadius: "8px", display: "block" }} />
+                                        <IconButton
+                                          size="small"
+                                          onClick={() => setLightboxImage(getFileUrl(messageText))}
+                                          sx={{
+                                            position: "absolute",
+                                            top: 4,
+                                            right: 4,
+                                            bgcolor: "rgba(0,0,0,0.65)",
+                                            color: "#fff",
+                                            "&:hover": { bgcolor: "rgba(0,0,0,0.85)" },
+                                            zIndex: 2
+                                          }}
+                                        >
+                                          <ArrowsOut size={16} />
+                                        </IconButton>
                                       </Box>
                                     );
                                   }
@@ -1620,6 +1644,25 @@ const GeneralApp = () => {
           onClose={() => setLightboxImage(null)}
         />
       )}
+      <MessageToast
+        open={messagePopup.open}
+        title={messagePopup.title}
+        message={messagePopup.message}
+        avatar={messagePopup.avatar}
+        onClose={() => setMessagePopup(prev => ({ ...prev, open: false }))}
+        onClick={() => {
+          const found = contacts.find(c => Number(c.id) === Number(messagePopup.senderId));
+          if (found) {
+            setActiveContact(found);
+          } else {
+            const foundConv = activeConversations.find(c => Number(c.id) === Number(messagePopup.senderId));
+            if (foundConv) {
+              setActiveContact(foundConv);
+            }
+          }
+          setMessagePopup(prev => ({ ...prev, open: false }));
+        }}
+      />
     </Stack>
   );
 };

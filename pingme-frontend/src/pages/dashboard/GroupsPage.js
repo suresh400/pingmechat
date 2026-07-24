@@ -4,7 +4,7 @@ import {
     Dialog, DialogTitle, DialogContent, DialogActions, TextField,
     Chip, CircularProgress, Divider, Snackbar, Alert, Tooltip, useMediaQuery, useTheme, Menu, MenuItem
 } from "@mui/material";
-import { MagnifyingGlass, Plus, PaperPlaneRight, Smiley, Users, X, Paperclip, VideoCamera, CaretLeft, Info, Phone, Hourglass, Palette, ListChecks } from "phosphor-react";
+import { MagnifyingGlass, Plus, PaperPlaneRight, Smiley, Users, X, Paperclip, VideoCamera, CaretLeft, Info, Phone, Hourglass, Palette, ListChecks, ArrowsOut } from "phosphor-react";
 import EmojiPicker, { Theme as EmojiTheme } from 'emoji-picker-react';
 import useSettings from "../../hooks/useSettings";
 import { useAuth } from "../../contexts/AuthContext";
@@ -14,6 +14,7 @@ import SelfDestructCountdown from "../../components/SelfDestructCountdown";
 import WhiteboardDialog from "../../components/WhiteboardDialog";
 import ConvertToTaskDialog from "../../components/ConvertToTaskDialog";
 import ImageLightbox from "../../components/ImageLightbox";
+import MessageToast from "../../components/MessageToast";
 
 import { API_BASE, BASE_URL } from "../../constants";
 
@@ -63,6 +64,7 @@ const GroupsPage = () => {
     const [selectedMembers, setSelectedMembers] = useState([]);
     const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
     const [lightboxImage, setLightboxImage] = useState(null);
+    const [messagePopup, setMessagePopup] = useState({ open: false, title: "", message: "", avatar: "", groupId: null });
 
     // Group members list
     const [groupMembers, setGroupMembers] = useState([]);
@@ -128,6 +130,16 @@ const GroupsPage = () => {
                     ...prev,
                     [msg.group_id]: (prev[msg.group_id] || 0) + 1,
                 }));
+                // Find group name
+                const gObj = groups.find(g => g.id === msg.group_id);
+                const gName = gObj ? gObj.name : "Group";
+                setMessagePopup({
+                    open: true,
+                    title: `${gName}`,
+                    message: `${msg.sender_name || "Someone"}: ${msg.message}`,
+                    avatar: msg.sender_avatar,
+                    groupId: msg.group_id
+                });
             }
         };
         socket.on("receive_group_message", handler);
@@ -563,6 +575,21 @@ const GroupsPage = () => {
                                                             return (
                                                                 <Box sx={{ position: "relative", borderRadius: 1, overflow: "hidden", mb: 0.5 }}>
                                                                     <video src={getFileUrl(messageText)} controls style={{ width: "100%", borderRadius: "8px", display: "block" }} />
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        onClick={() => setLightboxImage(getFileUrl(messageText))}
+                                                                        sx={{
+                                                                            position: "absolute",
+                                                                            top: 4,
+                                                                            right: 4,
+                                                                            bgcolor: "rgba(0,0,0,0.65)",
+                                                                            color: "#fff",
+                                                                            "&:hover": { bgcolor: "rgba(0,0,0,0.85)" },
+                                                                            zIndex: 2
+                                                                        }}
+                                                                    >
+                                                                        <ArrowsOut size={16} />
+                                                                    </IconButton>
                                                                 </Box>
                                                             );
                                                         }
@@ -925,6 +952,20 @@ const GroupsPage = () => {
                     onClose={() => setLightboxImage(null)}
                 />
             )}
+            <MessageToast
+                open={messagePopup.open}
+                title={messagePopup.title}
+                message={messagePopup.message}
+                avatar={messagePopup.avatar}
+                onClose={() => setMessagePopup(prev => ({ ...prev, open: false }))}
+                onClick={() => {
+                    const found = groups.find(g => Number(g.id) === Number(messagePopup.groupId));
+                    if (found) {
+                        setActiveGroup(found);
+                    }
+                    setMessagePopup(prev => ({ ...prev, open: false }));
+                }}
+            />
         </Stack>
     );
 };
