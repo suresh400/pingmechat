@@ -18,6 +18,9 @@ export default function WhiteboardDialog({ open, onClose, socket, chatId, isGrou
   const [brushSize, setBrushSize] = useState(4);
   const [isEraser, setIsEraser] = useState(false);
 
+  // Whiteboard Board Background Color state
+  const [boardBg, setBoardBg] = useState("#FFFFFF");
+
   // History stack for Undo
   const historyRef = useRef([]);
   const [canUndo, setCanUndo] = useState(false);
@@ -87,7 +90,7 @@ export default function WhiteboardDialog({ open, onClose, socket, chatId, isGrou
     ctx.scale(dpr, dpr);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.strokeStyle = isEraser ? "#FFFFFF" : color;
+    ctx.strokeStyle = isEraser ? "eraser" : color;
     ctx.lineWidth = brushSize;
     contextRef.current = ctx;
 
@@ -124,7 +127,7 @@ export default function WhiteboardDialog({ open, onClose, socket, chatId, isGrou
   // Update stroke style when color or brush size changes
   useEffect(() => {
     if (contextRef.current) {
-      contextRef.current.strokeStyle = isEraser ? "#FFFFFF" : color;
+      contextRef.current.strokeStyle = isEraser ? "eraser" : color;
       contextRef.current.lineWidth = brushSize;
     }
   }, [color, brushSize, isEraser]);
@@ -159,16 +162,22 @@ export default function WhiteboardDialog({ open, onClose, socket, chatId, isGrou
     if (!canvas || !ctx) return;
 
     ctx.beginPath();
-    ctx.strokeStyle = strokeColor;
+    if (strokeColor === "eraser") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.strokeStyle = "rgba(0,0,0,1)"; // Must be solid for destination-out to clear pixels
+    } else {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = strokeColor;
+    }
+    
     ctx.lineWidth = strokeSize;
     ctx.moveTo(x0, y0);
     ctx.lineTo(x1, y1);
     ctx.stroke();
     ctx.closePath();
 
-    // Reset current stroke settings
-    ctx.strokeStyle = isEraser ? "#FFFFFF" : color;
-    ctx.lineWidth = brushSize;
+    // Reset composite operation
+    ctx.globalCompositeOperation = "source-over";
 
     if (emit && socket) {
       socket.emit("whiteboard_draw", {
@@ -217,7 +226,7 @@ export default function WhiteboardDialog({ open, onClose, socket, chatId, isGrou
       if (e.cancelable) e.preventDefault();
     }
     const { x, y } = getCoordinates(e.nativeEvent || e);
-    const strokeColor = isEraser ? "#FFFFFF" : color;
+    const strokeColor = isEraser ? "eraser" : color;
     drawOnCanvas(lastX.current, lastY.current, x, y, strokeColor, brushSize, true);
     lastX.current = x;
     lastY.current = y;
@@ -254,7 +263,20 @@ export default function WhiteboardDialog({ open, onClose, socket, chatId, isGrou
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    canvas.toBlob((blob) => {
+    // Create a temporary canvas to bake the selected background color
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext("2d");
+
+    // 1. Fill with background color
+    tempCtx.fillStyle = boardBg;
+    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+    // 2. Draw drawing canvas content
+    tempCtx.drawImage(canvas, 0, 0);
+
+    tempCanvas.toBlob((blob) => {
       if (!blob) return;
       const file = new File([blob], `whiteboard-${Date.now()}.png`, { type: "image/png" });
       onSendImage(file);
@@ -262,7 +284,15 @@ export default function WhiteboardDialog({ open, onClose, socket, chatId, isGrou
     }, "image/png");
   };
 
-  const colors = ["#000000", "#FF3B30", "#007AFF", "#34C759", "#FFCC00", "#AF52DE", "#FF9500"];
+  const colors = ["#000000", "#FF3B30", "#007AFF", "#34C759", "#FFCC00", "#AF52DE", "#FF9500", "#FFFFFF"];
+  
+  const bgColors = [
+    { name: "White", value: "#FFFFFF" },
+    { name: "Cream", value: "#FDF6E3" },
+    { name: "Light Grey", value: "#F0F2F5" },
+    { name: "Dark Board", value: "#121212" },
+    { name: "Green Board", value: "#0B291B" }
+  ];
 
   return (
     <Dialog
@@ -306,14 +336,15 @@ export default function WhiteboardDialog({ open, onClose, socket, chatId, isGrou
             sx={{
               flexGrow: 1,
               position: "relative",
-              bgcolor: "#FFFFFF",
+              bgcolor: boardBg, // Real-time display of selected background color
               borderRadius: 2,
               border: "1.5px solid",
               borderColor: "divider",
               overflow: "hidden",
               minHeight: { xs: 260, sm: 360, md: 440 },
               touchAction: "none", // Critical for smooth touch drawing on mobile
-              cursor: isEraser ? "cell" : "crosshair"
+              cursor: isEraser ? "cell" : "crosshair",
+              transition: "background-color 0.2s ease"
             }}
           >
             <canvas
@@ -378,11 +409,39 @@ export default function WhiteboardDialog({ open, onClose, socket, chatId, isGrou
                 </Tooltip>
               </Stack>
 
+              {/* Whiteboard Background Color Option */}
+              <Stack spacing={0.8}>
+                <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                  BOARD BACKGROUND
+                </Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                  {bgColors.map((bg) => (
+                    <Tooltip key={bg.name} title={bg.name}>
+                      <Box
+                        onClick={() => setBoardBg(bg.value)}
+                        sx={{
+                          width: { xs: 26, sm: 30 },
+                          height: { xs: 26, sm: 30 },
+                          borderRadius: 1.5,
+                          bgcolor: bg.value,
+                          cursor: "pointer",
+                          border: "2px solid",
+                          borderColor: boardBg === bg.value ? "primary.main" : "divider",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                          "&:hover": { transform: "scale(1.08)" },
+                          transition: "all 0.15s ease"
+                        }}
+                      />
+                    </Tooltip>
+                  ))}
+                </Box>
+              </Stack>
+
               {/* Color Selection (Hidden when eraser selected) */}
               {!isEraser && (
                 <Stack spacing={0.8}>
                   <Typography variant="caption" color="text.secondary" fontWeight={700}>
-                    COLOR
+                    PEN COLOR
                   </Typography>
                   <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
                     {colors.map((c) => (
