@@ -3,15 +3,13 @@ import { Navigate, useRoutes, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import LoadingScreen from "../components/LoadingScreen";
 
-const DashboardLayout = Loadable(lazy(() => import("../layouts/dashboard")));
-
 // Static file extensions that should never be handled by React Router
 const STATIC_EXTENSIONS = /\.(xml|txt|json|ico|png|jpg|jpeg|svg|webp|woff|woff2|ttf|eot|css|js|map|pdf)$/i;
 
 /**
- * StaticFileGuard — Prevents static files from being redirected to /login.
+ * StaticFileGuard — Prevents static files from being redirected to /.
  * If the URL looks like a static file (e.g. /sitemap.xml), return null so
- * the browser can fetch it naturally. Otherwise redirect to /login.
+ * the browser can fetch it naturally. Otherwise redirect to /.
  */
 const StaticFileGuard = () => {
   const { pathname } = useLocation();
@@ -24,6 +22,16 @@ const Loadable = (Component) => (props) => (
     <Component {...props} />
   </Suspense>
 );
+
+const DashboardLayout = Loadable(lazy(() => import("../layouts/dashboard")));
+const LandingPage = Loadable(lazy(() => import("../pages/LandingPage")));
+const GeneralApp = Loadable(lazy(() => import("../pages/dashboard/GeneralApp")));
+const GroupsPage = Loadable(lazy(() => import("../pages/dashboard/GroupsPage")));
+const CallHistoryPage = Loadable(lazy(() => import("../pages/dashboard/CallHistoryPage")));
+const SettingsPage = Loadable(lazy(() => import("../pages/dashboard/SettingsPage")));
+const TasksPage = Loadable(lazy(() => import("../pages/dashboard/TasksPage")));
+const AdminDashboard = Loadable(lazy(() => import("../pages/dashboard/AdminDashboard")));
+const Page404 = Loadable(lazy(() => import("../pages/Page404")));
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -42,7 +50,7 @@ export default function Router() {
     { path: "/verify-otp", element: <Navigate to="/" replace /> },
     { path: "/reset-password", element: <Navigate to="/" replace /> },
 
-    // ── Protected dashboard (using a pathless layout route to keep /app, /groups, etc. flat) ──
+    // ── Protected dashboard ──
     {
       element: <PrivateRoute><DashboardLayout /></PrivateRoute>,
       children: [
@@ -60,12 +68,3 @@ export default function Router() {
     { path: "*", element: <StaticFileGuard /> },
   ]);
 }
-
-const LandingPage = Loadable(lazy(() => import("../pages/LandingPage")));
-const GeneralApp = Loadable(lazy(() => import("../pages/dashboard/GeneralApp")));
-const GroupsPage = Loadable(lazy(() => import("../pages/dashboard/GroupsPage")));
-const CallHistoryPage = Loadable(lazy(() => import("../pages/dashboard/CallHistoryPage")));
-const SettingsPage = Loadable(lazy(() => import("../pages/dashboard/SettingsPage")));
-const TasksPage = Loadable(lazy(() => import("../pages/dashboard/TasksPage")));
-const AdminDashboard = Loadable(lazy(() => import("../pages/dashboard/AdminDashboard")));
-const Page404 = Loadable(lazy(() => import("../pages/Page404")));
