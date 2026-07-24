@@ -447,9 +447,9 @@ export default function LandingPage() {
             }}
               onMouseEnter={() => setHoveredCard(i)}
               onMouseLeave={() => setHoveredCard(null)}>
-              <div style={styles.featureIcon}>{f.icon}</div>
-              <div style={styles.featureTitle}>{f.title}</div>
-              <div style={styles.featureDesc}>{f.desc}</div>
+              <div style={styles.featureIcon} aria-hidden="true">{f.icon}</div>
+              <h3 style={styles.featureTitle}>{f.title}</h3>
+              <p style={styles.featureDesc}>{f.desc}</p>
             </div>
           ))}
         </div>
@@ -521,13 +521,28 @@ export default function LandingPage() {
             <div key={i} style={{
               ...styles.faqItem,
               borderColor: openFaq === i ? GRAY_BORDER_HOVER : GRAY_BORDER,
-            }}
-              onClick={() => setOpenFaq(openFaq === i ? null : i)}>
-              <div style={styles.faqQ}>
+            }}>
+              <button
+                id={`faq-btn-${i}`}
+                aria-expanded={openFaq === i}
+                aria-controls={`faq-ans-${i}`}
+                onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                style={{
+                  ...styles.faqQ,
+                  width: "100%",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: LIGHT_TEXT,
+                  font: "inherit",
+                  textAlign: "left",
+                }}>
                 <span>{f.q}</span>
-                <span style={{ color: WHITE_ACCENT, fontSize: 20, fontWeight: 300, transition: "transform 0.2s", display: "inline-block", transform: openFaq === i ? "rotate(45deg)" : "rotate(0)" }}>+</span>
-              </div>
-              {openFaq === i && <div style={styles.faqA}>{f.a}</div>}
+                <span aria-hidden="true" style={{ color: WHITE_ACCENT, fontSize: 20, fontWeight: 300, transition: "transform 0.2s", display: "inline-block", transform: openFaq === i ? "rotate(45deg)" : "rotate(0)" }}>+</span>
+              </button>
+              {openFaq === i && (
+                <div id={`faq-ans-${i}`} role="region" aria-labelledby={`faq-btn-${i}`} style={styles.faqA}>{f.a}</div>
+              )}
             </div>
           ))}
         </div>

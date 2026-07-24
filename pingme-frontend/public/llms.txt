@@ -1,0 +1,44 @@
+# PingsMe
+
+> PingsMe is a real-time messaging platform with group chats, HD video & voice calls, file sharing, collaborative whiteboards, task management, and AI-powered chat assistant.
+
+## Product
+
+PingsMe is a full-stack web application built for seamless real-time communication. Users can register, find contacts by username, exchange messages instantly, make HD video/voice calls, create group chats, manage tasks, and share files — all from a single, beautifully designed interface.
+
+## Key Features
+
+- Real-time private and group messaging via Socket.IO
+- HD video and voice calls powered by Agora WebRTC
+- File and image sharing with Cloudinary storage
+- Collaborative whiteboard (canvas-based drawing tool)
+- Task/Kanban board — convert messages into tasks
+- AI chat assistant triggered with @ai in any chat
+- Self-destructing messages with countdown timers
+- OTP-based email verification and JWT authentication
+- Dark mode, emoji reactions, read receipts, typing indicators
+- Admin dashboard with broadcast messaging, user reports, and suggestions
+
+## Target Audience
+
+Individuals, teams, and communities who want a private, feature-rich alternative to mainstream messaging apps.
+
+## Pages
+
+- [Home](https://pingsme.in/) — Landing page with features, how-it-works, FAQ, contact, privacy, and terms
+
+## Contact
+
+- Support: supportpingmechat@gmail.com
+- Website: https://pingsme.in
+
+## Legal
+
+- Privacy Policy: https://pingsme.in/#legal
+- Terms of Service: https://pingsme.in/#legal
+
+## Technology
+
+- Frontend: React 18, Material UI, Socket.IO Client, Agora RTC SDK
+- Backend: Node.js, Express, MongoDB Atlas (Mongoose), Socket.IO
+- Hosting: Vercel (frontend), Render (backend)
