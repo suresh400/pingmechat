@@ -19,6 +19,7 @@ import SelfDestructCountdown from "../../components/SelfDestructCountdown";
 import WhiteboardDialog from "../../components/WhiteboardDialog";
 import ConvertToTaskDialog from "../../components/ConvertToTaskDialog";
 import logoCustom from "../../assets/logo-custom.png";
+import ImageLightbox from "../../components/ImageLightbox";
 
 import { API_BASE, BASE_URL } from "../../constants";
 
@@ -258,6 +259,7 @@ const GeneralApp = () => {
   const [whiteboardOpen, setWhiteboardOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [taskMessageText, setTaskMessageText] = useState("");
+  const [lightboxImage, setLightboxImage] = useState(null);
 
   const messagesEndRef = useRef(null);
   const [blockedUsers, setBlockedUsers] = useState(new Set());
@@ -1054,7 +1056,7 @@ const GeneralApp = () => {
                                           cursor: "pointer",
                                           bgcolor: "background.default"
                                         }}
-                                        onClick={() => window.open(getFileUrl(messageText), "_blank")}
+                                        onClick={() => setLightboxImage(getFileUrl(messageText))}
                                         onError={(e) => {
                                           console.error("[ImageRender] Failed to load:", getFileUrl(messageText));
                                           e.target.style.display = 'none';
@@ -1612,6 +1614,12 @@ const GeneralApp = () => {
           </Stack>
         </Box>
       </Dialog>
+      {lightboxImage && (
+        <ImageLightbox
+          src={lightboxImage}
+          onClose={() => setLightboxImage(null)}
+        />
+      )}
     </Stack>
   );
 };

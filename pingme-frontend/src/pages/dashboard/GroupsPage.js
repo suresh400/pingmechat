@@ -13,6 +13,7 @@ import { useOutletContext } from "react-router-dom";
 import SelfDestructCountdown from "../../components/SelfDestructCountdown";
 import WhiteboardDialog from "../../components/WhiteboardDialog";
 import ConvertToTaskDialog from "../../components/ConvertToTaskDialog";
+import ImageLightbox from "../../components/ImageLightbox";
 
 import { API_BASE, BASE_URL } from "../../constants";
 
@@ -61,6 +62,7 @@ const GroupsPage = () => {
     const [memberResults, setMemberResults] = useState([]);
     const [selectedMembers, setSelectedMembers] = useState([]);
     const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+    const [lightboxImage, setLightboxImage] = useState(null);
 
     // Group members list
     const [groupMembers, setGroupMembers] = useState([]);
@@ -579,7 +581,7 @@ const GroupsPage = () => {
                                                                         objectFit: "cover",
                                                                         cursor: "pointer"
                                                                     }}
-                                                                    onClick={() => window.open(getFileUrl(messageText), "_blank")}
+                                                                    onClick={() => setLightboxImage(getFileUrl(messageText))}
                                                                 />
                                                             );
                                                         }
@@ -915,6 +917,12 @@ const GroupsPage = () => {
                     authFetch={authFetch}
                     socket={socket}
                     onComplete={() => setSnackbar({ open: true, message: "Added to Kanban Board!", severity: "success" })}
+                />
+            )}
+            {lightboxImage && (
+                <ImageLightbox
+                    src={lightboxImage}
+                    onClose={() => setLightboxImage(null)}
                 />
             )}
         </Stack>
