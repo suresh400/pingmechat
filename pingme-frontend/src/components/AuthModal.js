@@ -37,7 +37,7 @@ const COUNTRY_CODES = [
 
 export default function AuthModal({ open, onClose, initialMode = "login" }) {
   const navigate = useNavigate();
-  const { sendOtp, verifyOtp, authFetch, updateCurrentUser } = useAuth();
+  const { sendOtp, verifyOtp, authFetch, updateCurrentUser, wakeupBackend } = useAuth();
   const fileInputRef = useRef(null);
 
   // Flow control steps: "phone" | "otp" | "existing_user" | "new_user_step1" | "new_user_step2"
@@ -86,6 +86,17 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
     fetchUserCount();
     const interval = setInterval(fetchUserCount, 10000);
     return () => clearInterval(interval);
+  }, [open]);
+
+  // Pre-warm the Render backend as soon as the modal opens
+  useEffect(() => {
+    if (!open) return;
+    if (wakeupBackend) {
+      wakeupBackend((msg) => console.log("[modal pre-warm]", msg))
+        .then(() => console.log("[modal pre-warm] Backend ready"))
+        .catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Reset modal state when opened/closed
@@ -199,7 +210,8 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
 
     setLoading(true);
     try {
-      await sendOtp(fullPhone);
+      await sendOtp(fullPhone, (msg) => setRetryStatus(msg));
+      setRetryStatus("");
       setStep("otp");
       setSuccess(`A 6-digit verification code has been sent to ${fullPhone}. It expires in 5 minutes.`);
       startResendCooldown();
@@ -223,7 +235,8 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
     setOtpExpired(false);
     setLoading(true);
     try {
-      await sendOtp(phone);
+      await sendOtp(phone, (msg) => setRetryStatus(msg));
+      setRetryStatus("");
       setSuccess(`A new 6-digit code has been sent to ${phone}. It expires in 5 minutes.`);
       startResendCooldown();
       // Restart the 5-min countdown
@@ -490,6 +503,21 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
                 />
               </Stack>
 
+              {/* Server warm-up banner (shown while pinging Render) */}
+              {retryStatus && (
+                <Box sx={{
+                  display: "flex", alignItems: "center", gap: 1.5,
+                  bgcolor: "rgba(255, 165, 0, 0.08)",
+                  border: "1px solid rgba(255, 165, 0, 0.25)",
+                  borderRadius: "10px", px: 2, py: 1.2,
+                }}>
+                  <CircularProgress size={14} sx={{ color: "#FF9800", flexShrink: 0 }} />
+                  <Typography variant="caption" sx={{ color: "#FF9800", fontWeight: 600, lineHeight: 1.4 }}>
+                    {retryStatus}
+                  </Typography>
+                </Box>
+              )}
+
               <Button
                 type="submit"
                 variant="contained"
@@ -507,11 +535,18 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
                   "&:hover": { backgroundColor: "#e5e5e5" },
                 }}
               >
-                {loading ? <CircularProgress size={22} color="inherit" /> : "Send OTP Code"}
+                {loading
+                  ? <Stack direction="row" spacing={1} alignItems="center">
+                      <CircularProgress size={18} color="inherit" />
+                      <span>{retryStatus ? "Connecting…" : "Sending…"}</span>
+                    </Stack>
+                  : "Send OTP Code"}
               </Button>
             </Stack>
           </form>
         )}
+
+
 
         {/* ── STEP 2: OTP VERIFICATION ── */}
         {step === "otp" && (() => {

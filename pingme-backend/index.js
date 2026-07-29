@@ -216,6 +216,31 @@ app.use((req, res, next) => {
 });
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// ── Health check endpoint ─────────────────────────────────────────────────────
+// Used by frontend to pre-warm the server before authentication attempts.
+// Also used by Render's uptime monitoring.
+app.get("/api/ping", (req, res) => {
+    res.json({ status: "ok", ts: Date.now(), server: "pingme-backend" });
+});
+
+// ── Keep-alive self-ping (Render free tier cold-start prevention) ─────────────
+// Pings itself every 10 minutes so Render doesn't spin it down after 15 min idle.
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || process.env.FRONTEND_URL?.split(",")[0] || null;
+if (SELF_URL) {
+    const keepAliveUrl = SELF_URL.includes("onrender.com")
+        ? SELF_URL.replace(/\/$/, "") + "/api/ping"
+        : null;
+    if (keepAliveUrl) {
+        setInterval(() => {
+            fetch(keepAliveUrl)
+                .then(() => console.log("[keep-alive] Self-ping OK"))
+                .catch((e) => console.warn("[keep-alive] Self-ping failed:", e.message));
+        }, 10 * 60 * 1000); // every 10 minutes
+        console.log("[keep-alive] Self-ping active →", keepAliveUrl);
+    }
+}
+
+
 app.get("/uploads/:filename", async (req, res, next) => {
     try {
         const { filename } = req.params;

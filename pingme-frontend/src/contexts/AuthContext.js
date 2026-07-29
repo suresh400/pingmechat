@@ -38,7 +38,36 @@ const fetchWithRetry = async (url, options = {}, { maxAttempts = 5, baseDelayMs 
     throw lastErr;
 };
 
+/**
+ * wakeupBackend — hits /api/ping with retries to wake a sleeping Render instance.
+ * Resolves as soon as the server responds (even if 1st attempt fails).
+ * @param {Function} [onStatus] - Called with a status string on each retry
+ */
+const wakeupBackend = async (onStatus) => {
+    const pingUrl = `${API_BASE}/ping`;
+    for (let i = 1; i <= 6; i++) {
+        try {
+            const res = await fetch(pingUrl, { method: "GET" });
+            if (res.ok) {
+                console.log(`[wakeupBackend] Server is awake (attempt ${i})`);
+                return true;
+            }
+        } catch (_) {
+            // network error — server still waking
+        }
+        if (i < 6) {
+            const msg = `Server is starting up… (${i}/6)`;
+            console.warn("[wakeupBackend]", msg);
+            if (onStatus) onStatus(msg);
+            await new Promise((r) => setTimeout(r, i * 2000)); // 2s, 4s, 6s, 8s, 10s
+        }
+    }
+    // Give up silently — the real request will throw a clear error if still unreachable
+    return false;
+};
+
 export const AuthProvider = ({ children }) => {
+
     const [currentUser, setCurrentUser] = useState(() => {
         try {
             const saved = localStorage.getItem("chatapp_user");
@@ -49,10 +78,17 @@ export const AuthProvider = ({ children }) => {
     });
     const [token, setToken] = useState(() => localStorage.getItem("chatapp_token") || null);
 
-    const sendOtp = useCallback(async (phone) => {
+    /**
+     * sendOtp — pre-warms the backend, then sends SMS OTP via Supabase.
+     * @param {string} phone - E.164 formatted phone number
+     * @param {Function} [onWarmupStatus] - Called with status string during server warm-up
+     */
+    const sendOtp = useCallback(async (phone, onWarmupStatus) => {
         if (!isSupabaseConfigured) {
             throw new Error("Supabase is not configured. Please add your credentials to the .env file.");
         }
+        // Pre-warm the backend so the token exchange after OTP verify succeeds immediately
+        await wakeupBackend(onWarmupStatus);
         const { data, error } = await supabase.auth.signInWithOtp({
             phone: phone.trim(),
         });
@@ -183,7 +219,7 @@ export const AuthProvider = ({ children }) => {
     }, [token, currentUser]);
 
     return (
-        <AuthContext.Provider value={{ currentUser, token, sendOtp, verifyOtp, login, logout, authFetch, isAuthenticated: !!token, updateCurrentUser, refreshUser }}>
+        <AuthContext.Provider value={{ currentUser, token, sendOtp, verifyOtp, login, logout, authFetch, isAuthenticated: !!token, updateCurrentUser, refreshUser, wakeupBackend }}>
             {children}
         </AuthContext.Provider>
     );
