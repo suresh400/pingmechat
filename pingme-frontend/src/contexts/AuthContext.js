@@ -250,6 +250,14 @@ export const AuthProvider = ({ children }) => {
     const logout = useCallback(() => {
         localStorage.removeItem("chatapp_token");
         localStorage.removeItem("chatapp_user");
+        
+        // Remove all user-scoped cached conversations and message histories
+        Object.keys(localStorage).forEach((key) => {
+            if (key.startsWith("pingme_")) {
+                localStorage.removeItem(key);
+            }
+        });
+
         setToken(null);
         setCurrentUser(null);
     }, []);

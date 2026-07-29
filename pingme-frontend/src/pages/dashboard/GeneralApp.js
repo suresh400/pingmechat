@@ -267,16 +267,27 @@ const GeneralApp = () => {
   const [blockedUsers, setBlockedUsers] = useState(new Set());
   const [showContactInfo, setShowContactInfo] = useState(false);
 
-  // Conversations Persistence
-  const [activeConversations, setActiveConversations] = useState(() => {
-    try {
-      const cached = localStorage.getItem("pingme_cached_conversations");
-      return cached ? JSON.parse(cached) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Conversations Persistence (User Scoped)
+  const [activeConversations, setActiveConversations] = useState([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
+
+  // Load user-scoped conversations on mount or currentUser change
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setActiveConversations([]);
+      return;
+    }
+    try {
+      const cached = localStorage.getItem(`pingme_cached_conversations_${currentUser.id}`);
+      if (cached) {
+        setActiveConversations(JSON.parse(cached));
+      } else {
+        setActiveConversations([]);
+      }
+    } catch {
+      setActiveConversations([]);
+    }
+  }, [currentUser?.id]);
 
   // ── Get global call state from DashboardLayout via Outlet context ──────────
   const outletCtx = useOutletContext() || {};
@@ -302,7 +313,9 @@ const GeneralApp = () => {
   const fileInputRef = useRef(null);
 
   const fetchActiveConversations = useCallback(async () => {
-    const hasCached = !!localStorage.getItem("pingme_cached_conversations");
+    if (!currentUser?.id) return;
+    const cacheKey = `pingme_cached_conversations_${currentUser.id}`;
+    const hasCached = !!localStorage.getItem(cacheKey);
     if (!hasCached) {
       setConversationsLoading(true);
     }
@@ -311,12 +324,12 @@ const GeneralApp = () => {
       const data = await res.json();
       const conversations = Array.isArray(data) ? data : [];
       setActiveConversations(conversations);
-      localStorage.setItem("pingme_cached_conversations", JSON.stringify(conversations));
+      localStorage.setItem(cacheKey, JSON.stringify(conversations));
     } catch (err) {
       console.error("[fetchActiveConversations] Error:", err);
     }
     finally { setConversationsLoading(false); }
-  }, [authFetch]);
+  }, [authFetch, currentUser?.id]);
 
   useEffect(() => { fetchActiveConversations(); }, [fetchActiveConversations]);
 
@@ -324,7 +337,6 @@ const GeneralApp = () => {
     try {
       const res = await authFetch(`${API_BASE}/contacts/blocked`);
       const data = await res.json();
-      console.log("[fetchBlockedUsers] IDs:", data);
       setBlockedUsers(new Set(Array.isArray(data) ? data : []));
     } catch (err) {
       console.error("[fetchBlockedUsers] Error:", err);
@@ -376,7 +388,9 @@ const GeneralApp = () => {
 
   // ── Fetch message history ───────────────────────────────────────────────────
   const fetchMessages = useCallback(async (contactId) => {
-    const hasCached = !!localStorage.getItem(`pingme_cached_msgs_${contactId}`);
+    if (!currentUser?.id) return;
+    const msgCacheKey = `pingme_cached_msgs_${currentUser.id}_${contactId}`;
+    const hasCached = !!localStorage.getItem(msgCacheKey);
     if (!hasCached) {
       setMessagesLoading(true);
     }
@@ -385,20 +399,21 @@ const GeneralApp = () => {
       const data = await res.json();
       const msgs = Array.isArray(data) ? data : [];
       setMessages(msgs);
-      localStorage.setItem(`pingme_cached_msgs_${contactId}`, JSON.stringify(msgs));
+      localStorage.setItem(msgCacheKey, JSON.stringify(msgs));
       fetchActiveConversations();
       if (fetchTotalUnread) fetchTotalUnread();
     } catch {
       // Keep cached if network fails
     }
     finally { setMessagesLoading(false); }
-  }, [authFetch, fetchActiveConversations, fetchTotalUnread]);
+  }, [authFetch, fetchActiveConversations, fetchTotalUnread, currentUser?.id]);
 
   // Load cached messages instantly when contact changes, then update from network
   useEffect(() => {
-    if (activeContact) {
+    if (activeContact && currentUser?.id) {
+      const msgCacheKey = `pingme_cached_msgs_${currentUser.id}_${activeContact.id}`;
       try {
-        const cached = localStorage.getItem(`pingme_cached_msgs_${activeContact.id}`);
+        const cached = localStorage.getItem(msgCacheKey);
         if (cached) {
           setMessages(JSON.parse(cached));
         } else {
@@ -409,18 +424,19 @@ const GeneralApp = () => {
       }
       fetchMessages(activeContact.id);
     }
-  }, [activeContact, fetchMessages]);
+  }, [activeContact, fetchMessages, currentUser?.id]);
 
   // Sync state changes back to cache in real time
   useEffect(() => {
-    if (activeContact?.id && messages.length > 0) {
+    if (activeContact?.id && currentUser?.id && messages.length > 0) {
+      const msgCacheKey = `pingme_cached_msgs_${currentUser.id}_${activeContact.id}`;
       try {
-        localStorage.setItem(`pingme_cached_msgs_${activeContact.id}`, JSON.stringify(messages));
+        localStorage.setItem(msgCacheKey, JSON.stringify(messages));
       } catch (e) {
         console.error(e);
       }
     }
-  }, [messages, activeContact?.id]);
+  }, [messages, activeContact?.id, currentUser?.id]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 

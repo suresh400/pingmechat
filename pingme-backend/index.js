@@ -2384,6 +2384,15 @@ app.get("/api/groups", verifyToken, async (req, res) => {
 app.get("/api/groups/:groupId/messages", verifyToken, async (req, res) => {
     const { groupId } = req.params;
     try {
+        // Enforce membership check for security and privacy
+        const [memberCheck] = await db.query(
+            "SELECT id FROM group_members WHERE group_id = ? AND user_id = ?",
+            [groupId, req.user.id]
+        );
+        if (memberCheck.length === 0) {
+            return res.status(403).json({ message: "Access denied. You are not a member of this group." });
+        }
+
         const [rows] = await db.query(
             `SELECT gm.*, u.username AS sender_name, u.avatar AS sender_avatar
        FROM group_messages gm JOIN users u ON gm.sender_id = u.id
@@ -2401,6 +2410,15 @@ app.get("/api/groups/:groupId/messages", verifyToken, async (req, res) => {
 app.get("/api/groups/:groupId/members", verifyToken, async (req, res) => {
     const { groupId } = req.params;
     try {
+        // Enforce membership check for security and privacy
+        const [memberCheck] = await db.query(
+            "SELECT id FROM group_members WHERE group_id = ? AND user_id = ?",
+            [groupId, req.user.id]
+        );
+        if (memberCheck.length === 0) {
+            return res.status(403).json({ message: "Access denied. You are not a member of this group." });
+        }
+
         const [rows] = await db.query(
             `SELECT u.id, u.username, u.avatar, u.bio, u.is_online, u.last_seen 
              FROM group_members gm
