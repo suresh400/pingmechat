@@ -180,8 +180,8 @@ const ReportSchema = new mongoose.Schema({
 const Report = mongoose.model("Report", ReportSchema);
 
 const SuggestionSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
-  user_id: { type: Number },
+  id: { type: Number },
+  user_id: { type: mongoose.Schema.Types.Mixed },
   suggestion: { type: String },
   submitted_at: { type: Date, default: Date.now }
 });
@@ -1119,7 +1119,9 @@ const db = {
       const suggestionsList = await Suggestion.find({}).sort({ submitted_at: -1 }).lean();
       const enrichedSuggestions = [];
       for (const s of suggestionsList) {
-        const u = await User.findOne({ id: s.user_id }).lean();
+        const u = await User.findOne({ 
+          $or: [{ id: s.user_id }, { id: String(s.user_id) }] 
+        }).lean();
         enrichedSuggestions.push({
           ...s,
           username: u ? u.username : `User ${s.user_id}`,

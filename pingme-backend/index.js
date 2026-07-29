@@ -1623,40 +1623,33 @@ app.get("/api/contacts/blocked", verifyToken, async (req, res) => {
 app.post("/api/upload", verifyToken, upload.single("file"), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: "No file uploaded." });
     
-    if (!useCloudinary) {
-        // Clean up the local temp file immediately to avoid storing files on the server
+    if (useCloudinary) {
         try {
-            fs.unlinkSync(req.file.path);
-        } catch (unlinkErr) {}
-        return res.status(400).json({ message: "Cloudinary is not configured on this server. Storage of media files is disabled." });
-    }
+            const result = await cloudinary.uploader.upload(req.file.path, {
+                resource_type: "auto",
+                folder: "pingme"
+            });
+            
+            // Clean up the local temp file saved by multer
+            try { fs.unlinkSync(req.file.path); } catch (unlinkErr) {}
 
-    try {
-        const result = await cloudinary.uploader.upload(req.file.path, {
-            resource_type: "auto",
-            folder: "pingme"
-        });
-        
-        // Clean up the local temp file saved by multer
-        try {
-            fs.unlinkSync(req.file.path);
-        } catch (unlinkErr) {
-            console.error("[Cloudinary] Temp file clean up error:", unlinkErr.message);
+            await db.saveAttachment(req.file.filename, req.file.mimetype, result.secure_url);
+            console.log("[Upload] Cloudinary upload success:", result.secure_url);
+            return res.json({ url: result.secure_url });
+        } catch (err) {
+            console.error("[Upload] Cloudinary upload failed, falling back to local storage:", err.message);
         }
-
-        // Store only the Cloudinary URL in MongoDB (no binary buffer)
-        await db.saveAttachment(req.file.filename, req.file.mimetype, result.secure_url);
-
-        console.log("[Cloudinary] Upload success:", result.secure_url);
-        return res.json({ url: result.secure_url });
-    } catch (err) {
-        console.error("[Cloudinary] Upload failed:", err);
-        // Clean up the local temp file even on error
-        try {
-            fs.unlinkSync(req.file.path);
-        } catch (unlinkErr) {}
-        return res.status(500).json({ message: "Failed to upload file to Cloudinary." });
     }
+
+    // Local file storage fallback (when Cloudinary is unconfigured or fails)
+    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    try {
+        await db.saveAttachment(req.file.filename, req.file.mimetype, fileUrl);
+    } catch (dbErr) {
+        console.error("[Upload] Save attachment error:", dbErr.message);
+    }
+    console.log("[Upload] Local storage upload success:", fileUrl);
+    return res.json({ url: fileUrl });
 });
 
 
