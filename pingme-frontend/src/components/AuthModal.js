@@ -192,20 +192,20 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
     setError("");
     setSuccess("");
 
-    // Strip non-digit characters from subscriber number
-    const cleanDigits = subscriberNumber.replace(/\D/g, "");
-    if (!cleanDigits) {
+    // Robust E.164 phone normalization for any number
+    let digits = subscriberNumber.replace(/\D/g, "").replace(/^0+/, "");
+    const ccDigits = countryCode.replace(/\D/g, "");
+    if (digits.startsWith(ccDigits) && digits.length > 10) {
+      digits = digits.slice(ccDigits.length);
+    }
+
+    if (!digits || digits.length < 6) {
       setError("Please enter a valid mobile number.");
       return;
     }
 
-    if (cleanDigits.length < 6) {
-      setError("Phone number is too short. Please enter a valid number.");
-      return;
-    }
-
     // Format strictly as E.164: +[country_code][number]
-    const fullPhone = `${countryCode}${cleanDigits}`;
+    const fullPhone = `${countryCode}${digits}`;
     setPhone(fullPhone);
 
     setLoading(true);
@@ -219,7 +219,11 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
       console.error("Failed to send OTP:", err);
       let errMsg = err.message || "Failed to send verification code.";
       if (errMsg.toLowerCase().includes("sms provider") || errMsg.toLowerCase().includes("provider")) {
-        errMsg = "SMS Provider error. Please verify Phone Auth and Twilio settings are configured in the Supabase Dashboard.";
+        errMsg = "SMS Provider error. Please check Supabase Phone Auth settings or test mode.";
+      } else if (errMsg.toLowerCase().includes("rate limit") || errMsg.toLowerCase().includes("too many")) {
+        errMsg = "Too many SMS requests sent to this number. Please wait a few minutes before trying again.";
+      } else if (errMsg.toLowerCase().includes("invalid phone")) {
+        errMsg = "Invalid phone number format. Please check your country code and number.";
       }
       setError(errMsg);
     } finally {
@@ -430,78 +434,142 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
         {step === "phone" && (
           <form onSubmit={handleSendCode}>
             <Stack spacing={2.5}>
-              <Typography variant="body2" align="center" sx={{ color: "rgba(255, 255, 255, 0.6)", mb: 0.5 }}>
-                Sign in or Register with Phone Number
+              <Typography variant="body2" align="center" sx={{ color: "rgba(255, 255, 255, 0.65)", fontSize: 13.5, fontWeight: 500 }}>
+                Enter your mobile number to receive a 6-digit verification code
               </Typography>
 
-              <Stack direction="row" spacing={1.5} alignItems="center">
-                {/* Country Code Dropdown Menu with Flags */}
+              {/* Unified Luxury Input Box */}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  bgcolor: "rgba(255, 255, 255, 0.04)",
+                  border: "1px solid rgba(255, 255, 255, 0.16)",
+                  borderRadius: "16px",
+                  p: 0.6,
+                  transition: "all 0.25s ease",
+                  "&:hover": {
+                    borderColor: "rgba(255, 255, 255, 0.35)",
+                    bgcolor: "rgba(255, 255, 255, 0.06)",
+                  },
+                  "&:focus-within": {
+                    borderColor: "#3b82f6",
+                    boxShadow: "0 0 16px rgba(59, 130, 246, 0.3)",
+                    bgcolor: "rgba(255, 255, 255, 0.07)",
+                  },
+                }}
+              >
+                {/* Country Code Dropdown */}
                 <Select
                   value={countryCode}
                   onChange={(e) => setCountryCode(e.target.value)}
-                  size="small"
+                  variant="standard"
+                  disableUnderline
                   MenuProps={{
                     PaperProps: {
                       sx: {
-                        bgcolor: "#141414",
+                        bgcolor: "#161618",
                         color: "#fff",
                         maxHeight: 280,
+                        borderRadius: "14px",
                         border: "1px solid rgba(255, 255, 255, 0.15)",
+                        boxShadow: "0 20px 40px rgba(0,0,0,0.8)",
                         "& .MuiMenuItem-root": {
                           fontSize: 14,
-                          py: 1,
+                          py: 1.2,
+                          px: 2,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
                           "&:hover": { bgcolor: "rgba(255, 255, 255, 0.08)" },
-                          "&.Mui-selected": { bgcolor: "rgba(255, 255, 255, 0.15)" }
+                          "&.Mui-selected": { bgcolor: "rgba(59, 130, 246, 0.2)", fontWeight: 700 }
                         }
                       }
                     }
                   }}
                   sx={{
-                    minWidth: 120,
+                    minWidth: 105,
                     color: "#fff",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    bgcolor: "rgba(255, 255, 255, 0.03)",
-                    "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.15)" },
-                    "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255, 255, 255, 0.3)" },
-                    "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#fff" },
-                    "& .MuiSvgIcon-root": { color: "#fff" }
+                    fontSize: 15,
+                    fontWeight: 700,
+                    pl: 1.5,
+                    pr: 0.5,
+                    py: 0.8,
+                    borderRight: "1px solid rgba(255, 255, 255, 0.12)",
+                    "& .MuiSvgIcon-root": { color: "rgba(255,255,255,0.7)" },
+                    "& .MuiSelect-select": {
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1
+                    }
                   }}
                 >
                   {COUNTRY_CODES.map((c) => (
                     <MenuItem key={`${c.code}-${c.country}`} value={c.code}>
-                      <span style={{ marginRight: 8, fontSize: 16 }}>{c.flag}</span>
-                      <span>{c.code}</span>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <span style={{ fontSize: 18 }}>{c.flag}</span>
+                        <span>{c.code}</span>
+                      </Box>
+                      <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.4)", ml: 2 }}>
+                        {c.country}
+                      </Typography>
                     </MenuItem>
                   ))}
                 </Select>
 
                 {/* Subscriber Phone Input */}
                 <TextField
-                  label="Mobile Number"
                   name="subscriberNumber"
                   type="tel"
                   fullWidth
                   required
-                  placeholder="9876543210"
+                  placeholder="98765 43210"
                   value={subscriberNumber}
                   onChange={(e) => setSubscriberNumber(e.target.value)}
-                  variant="outlined"
-                  size="small"
-                  helperText={`Full format: ${countryCode}${subscriberNumber.replace(/\D/g, "")}`}
-                  FormHelperTextProps={{ sx: { color: "rgba(255,255,255,0.4)", fontSize: 11 } }}
+                  variant="standard"
+                  InputProps={{ disableUnderline: true }}
+                  onFocus={() => {
+                    if (wakeupBackend) wakeupBackend().catch(() => {});
+                  }}
                   sx={{
-                    "& .MuiInputBase-input": { color: "#fff", fontSize: 15, fontWeight: 600 },
-                    "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
-                    "& .MuiInputLabel-root.Mui-focused": { color: "#fff" },
-                    "& .MuiOutlinedInput-root": {
-                      "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
-                      "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-                      "&.Mui-focused fieldset": { borderColor: "#fff" },
+                    px: 2,
+                    "& .MuiInputBase-input": {
+                      color: "#fff",
+                      fontSize: 16,
+                      fontWeight: 600,
+                      letterSpacing: 0.5,
+                      py: 0.8,
+                      "&::placeholder": { color: "rgba(255,255,255,0.25)", opacity: 1 }
                     },
                   }}
                 />
-              </Stack>
+              </Box>
+
+              {/* Real-time Formatted Number Preview Badge */}
+              {subscriberNumber.trim().length > 0 && (() => {
+                let digits = subscriberNumber.replace(/\D/g, "").replace(/^0+/, "");
+                const ccDigits = countryCode.replace(/\D/g, "");
+                if (digits.startsWith(ccDigits) && digits.length > 10) digits = digits.slice(ccDigits.length);
+                const selectedObj = COUNTRY_CODES.find(c => c.code === countryCode) || { flag: "📱" };
+                return (
+                  <Box sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    bgcolor: "rgba(59, 130, 246, 0.08)",
+                    border: "1px solid rgba(59, 130, 246, 0.2)",
+                    borderRadius: "10px",
+                    px: 2, py: 0.8
+                  }}>
+                    <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)" }}>
+                      Full Mobile Number:
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "#60a5fa", fontWeight: 700, fontFamily: "monospace", fontSize: 13 }}>
+                      {selectedObj.flag} {countryCode} {digits}
+                    </Typography>
+                  </Box>
+                );
+              })()}
 
               {/* Server warm-up banner (shown while pinging Render) */}
               {retryStatus && (
@@ -522,23 +590,33 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
                 type="submit"
                 variant="contained"
                 fullWidth
-                disabled={loading}
+                disabled={loading || !subscriberNumber.replace(/\D/g, "")}
                 sx={{
-                  backgroundColor: "#fff",
-                  color: "#000",
-                  borderRadius: 50,
-                  py: 1.2,
+                  background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+                  color: "#fff",
+                  borderRadius: "50px",
+                  py: 1.3,
                   fontWeight: 800,
                   textTransform: "none",
                   fontSize: 15,
-                  mt: 1,
-                  "&:hover": { backgroundColor: "#e5e5e5" },
+                  boxShadow: "0 8px 24px rgba(37, 99, 235, 0.35)",
+                  transition: "all 0.25s ease",
+                  "&:hover": {
+                    background: "linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)",
+                    boxShadow: "0 12px 28px rgba(37, 99, 235, 0.5)",
+                    transform: "translateY(-1px)"
+                  },
+                  "&.Mui-disabled": {
+                    background: "rgba(255, 255, 255, 0.12)",
+                    color: "rgba(255,255,255,0.4)",
+                    boxShadow: "none"
+                  }
                 }}
               >
                 {loading
                   ? <Stack direction="row" spacing={1} alignItems="center">
                       <CircularProgress size={18} color="inherit" />
-                      <span>{retryStatus ? "Connecting…" : "Sending…"}</span>
+                      <span>{retryStatus ? "Connecting…" : "Sending OTP…"}</span>
                     </Stack>
                   : "Send OTP Code"}
               </Button>
