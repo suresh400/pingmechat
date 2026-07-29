@@ -10,6 +10,34 @@ const extractError = (data, fallback) =>
     (Array.isArray(data?.errors) && data.errors.length > 0 ? data.errors[0].msg : null) ||
     fallback;
 
+/**
+ * Fetch with automatic retry and exponential backoff.
+ * Retries only on network errors (no response), not on HTTP error status codes.
+ * @param {string} url
+ * @param {RequestInit} options
+ * @param {object} retryOpts
+ * @param {number} retryOpts.maxAttempts - Total attempts (default 5)
+ * @param {number} retryOpts.baseDelayMs - Initial retry delay ms (default 2000)
+ * @param {Function} retryOpts.onRetry - Called with (attempt, delayMs) on each retry
+ */
+const fetchWithRetry = async (url, options = {}, { maxAttempts = 5, baseDelayMs = 2000, onRetry } = {}) => {
+    let lastErr;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const res = await fetch(url, options);
+            return res; // any HTTP response (even 4xx/5xx) — caller handles
+        } catch (err) {
+            lastErr = err;
+            if (attempt === maxAttempts) break;
+            const delay = baseDelayMs * attempt; // 2s, 4s, 6s, 8s
+            console.warn(`[fetchWithRetry] Attempt ${attempt}/${maxAttempts} failed. Retrying in ${delay}ms…`, err.message);
+            if (onRetry) onRetry(attempt, delay);
+            await new Promise((r) => setTimeout(r, delay));
+        }
+    }
+    throw lastErr;
+};
+
 export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(() => {
         try {
@@ -32,7 +60,14 @@ export const AuthProvider = ({ children }) => {
         return data;
     }, []);
 
-    const verifyOtp = useCallback(async (phone, code) => {
+    /**
+     * verifyOtp — verifies SMS OTP with Supabase then exchanges the session for a backend JWT.
+     * @param {string} phone
+     * @param {string} code
+     * @param {Function} [onRetryStatus] - Called with a human-readable status string on each retry
+     */
+    const verifyOtp = useCallback(async (phone, code, onRetryStatus) => {
+        // 1. Verify with Supabase
         const { data, error } = await supabase.auth.verifyOtp({
             phone: phone.trim(),
             token: code.trim(),
@@ -43,17 +78,32 @@ export const AuthProvider = ({ children }) => {
         const session = data.session;
         if (!session) throw new Error("No session returned from Supabase authentication.");
 
-        // Exchange Supabase session token for local backend token
+        // 2. Exchange Supabase token for backend JWT — with retry for Render cold-starts
         let res;
         try {
-            res = await fetch(`${API_BASE}/auth/supabase-login`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token: session.access_token, phone: phone.trim() }),
-            });
+            res = await fetchWithRetry(
+                `${API_BASE}/auth/supabase-login`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ token: session.access_token, phone: phone.trim() }),
+                },
+                {
+                    maxAttempts: 5,
+                    baseDelayMs: 2000,
+                    onRetry: (attempt, delayMs) => {
+                        const msg = `Server is warming up… retrying (${attempt}/4). Please wait.`;
+                        console.warn("[verifyOtp]", msg);
+                        if (onRetryStatus) onRetryStatus(msg);
+                    },
+                }
+            );
         } catch (fetchErr) {
-            console.error("[verifyOtp] Fetch to backend failed:", fetchErr);
-            throw new Error("Unable to connect to authentication server. Please check your network connection and try again.");
+            console.error("[verifyOtp] All retry attempts failed:", fetchErr);
+            throw new Error(
+                "Cannot reach the authentication server after multiple attempts. " +
+                "The server may be temporarily unavailable. Please wait 30 seconds and try again."
+            );
         }
 
         const resData = await res.json().catch(() => ({}));

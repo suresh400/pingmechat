@@ -50,6 +50,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [retryStatus, setRetryStatus] = useState(""); // shown during backend cold-start retries
   const [userCount, setUserCount] = useState(null);
 
   // OTP countdown timer — 5 minutes (300 seconds), matches Supabase OTP TTL
@@ -97,6 +98,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
       setStep("phone");
       setError("");
       setSuccess("");
+      setRetryStatus("");
       setLoading(false);
       setExistingUserData(null);
       setNewUsername("");
@@ -259,7 +261,10 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
 
     setLoading(true);
     try {
-      const resData = await verifyOtp(phone, otp);
+      const resData = await verifyOtp(phone, otp, (statusMsg) => {
+        setRetryStatus(statusMsg);
+      });
+      setRetryStatus("");
       setLoading(false);
 
       if (resData.isNewUser) {
@@ -273,11 +278,10 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
       }
     } catch (err) {
       console.error("[handleVerifyCode] Error:", err);
+      setRetryStatus("");
       setLoading(false);
       let errMsg = err.message || "Invalid or expired verification code.";
-      if (errMsg.includes("Failed to fetch") || errMsg.includes("Unable to connect")) {
-        errMsg = "Unable to connect to authentication server. Please check your internet connection or try again in a few seconds.";
-      } else if (errMsg.toLowerCase().includes("expired") || errMsg.toLowerCase().includes("invalid") || errMsg.toLowerCase().includes("otp")) {
+      if (errMsg.toLowerCase().includes("expired") || errMsg.toLowerCase().includes("invalid") || (errMsg.toLowerCase().includes("otp") && !errMsg.toLowerCase().includes("server"))) {
         errMsg = "Verification code has expired or is invalid. Please click 'Resend Code' to get a new 6-digit code.";
       }
       setError(errMsg);
@@ -575,6 +579,27 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
                   }}
                 />
 
+                {/* Server warm-up / retry status banner */}
+                {retryStatus && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                      bgcolor: "rgba(255, 165, 0, 0.08)",
+                      border: "1px solid rgba(255, 165, 0, 0.25)",
+                      borderRadius: "10px",
+                      px: 2,
+                      py: 1.2,
+                    }}
+                  >
+                    <CircularProgress size={14} sx={{ color: "#FF9800", flexShrink: 0 }} />
+                    <Typography variant="caption" sx={{ color: "#FF9800", fontWeight: 600, lineHeight: 1.4 }}>
+                      {retryStatus}
+                    </Typography>
+                  </Box>
+                )}
+
                 <Button
                   type="submit"
                   variant="contained"
@@ -592,8 +617,14 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
                     "&.Mui-disabled": { backgroundColor: "rgba(255, 255, 255, 0.3)", color: "rgba(0,0,0,0.5)" }
                   }}
                 >
-                  {loading ? <CircularProgress size={22} color="inherit" /> : "Verify & Continue"}
+                  {loading
+                    ? <Stack direction="row" spacing={1} alignItems="center">
+                        <CircularProgress size={18} color="inherit" />
+                        <span>{retryStatus ? "Connecting…" : "Verifying…"}</span>
+                      </Stack>
+                    : "Verify & Continue"}
                 </Button>
+
 
                 <Stack direction="row" justifyContent="space-between" mt={0.5}>
                   <Box>
