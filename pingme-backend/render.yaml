@@ -7,7 +7,13 @@ services:
     envVars:
       - key: PORT
         value: 10000
+      - key: RENDER_EXTERNAL_URL
+        value: https://pingme-backend.onrender.com
+      - key: FRONTEND_URL
+        value: https://www.pingsme.in,https://pingsme.in
       - key: JWT_SECRET
+        sync: false
+      - key: MONGODB_URI
         sync: false
       - key: AGORA_APP_ID
         sync: false
@@ -21,5 +27,15 @@ services:
         sync: false
       - key: SMTP_PASS
         sync: false
-      - key: FRONTEND_URL
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
         sync: false
