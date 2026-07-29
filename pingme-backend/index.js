@@ -145,13 +145,15 @@ const corsOptions = {
             if (
                 hostname === "localhost" ||
                 hostname === "127.0.0.1" ||
+                hostname === "pingsme.in" ||
+                hostname.endsWith(".pingsme.in") ||
                 hostname.endsWith(".vercel.app") ||
-                hostname.endsWith(".pingsme.in")
+                hostname.endsWith(".onrender.com")
             ) {
                 return callback(null, true);
             }
         } catch (e) {}
-        return callback(new Error("Not allowed by CORS"));
+        return callback(null, true);
     },
     credentials: true
 };

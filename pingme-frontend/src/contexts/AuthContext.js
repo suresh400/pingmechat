@@ -44,12 +44,19 @@ export const AuthProvider = ({ children }) => {
         if (!session) throw new Error("No session returned from Supabase authentication.");
 
         // Exchange Supabase session token for local backend token
-        const res = await fetch(`${API_BASE}/auth/supabase-login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: session.access_token, phone: phone.trim() }),
-        });
-        const resData = await res.json();
+        let res;
+        try {
+            res = await fetch(`${API_BASE}/auth/supabase-login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token: session.access_token, phone: phone.trim() }),
+            });
+        } catch (fetchErr) {
+            console.error("[verifyOtp] Fetch to backend failed:", fetchErr);
+            throw new Error("Unable to connect to authentication server. Please check your network connection and try again.");
+        }
+
+        const resData = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(extractError(resData, "Authentication exchange failed"));
 
         localStorage.setItem("chatapp_token", resData.token);

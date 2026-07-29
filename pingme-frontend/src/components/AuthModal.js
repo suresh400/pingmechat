@@ -188,8 +188,15 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
         setStep("existing_user");
       }
     } catch (err) {
+      console.error("[handleVerifyCode] Error:", err);
       setLoading(false);
-      setError(err.message || "Invalid or expired verification code.");
+      let errMsg = err.message || "Invalid or expired verification code.";
+      if (errMsg.includes("Failed to fetch") || errMsg.includes("Unable to connect")) {
+        errMsg = "Unable to connect to authentication server. Please check your internet connection or try again in a few seconds.";
+      } else if (errMsg.toLowerCase().includes("expired") || errMsg.toLowerCase().includes("invalid") || errMsg.toLowerCase().includes("otp")) {
+        errMsg = "Verification code has expired or is invalid. Please click 'Resend Code' to get a new 6-digit code.";
+      }
+      setError(errMsg);
     }
   };
 
