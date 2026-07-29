@@ -178,24 +178,36 @@ app.use(
     helmet({
         contentSecurityPolicy: {
             directives: {
-                defaultSrc: ["'self'"],
-                scriptSrc: ["'self'"],
-                styleSrc: ["'self'", "'unsafe-inline'"],
-                imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://lh3.googleusercontent.com", "blob:"],
+                defaultSrc: ["'self'", "*"],
+                scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+                styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+                imgSrc: [
+                    "'self'",
+                    "data:",
+                    "blob:",
+                    "https://api.dicebear.com",
+                    "https://res.cloudinary.com",
+                    "https://lh3.googleusercontent.com",
+                    "*"
+                ],
                 connectSrc: [
                     "'self'",
+                    "*",
                     "https://www.pingsme.in",
                     "https://pingsme.in",
                     "wss://www.pingsme.in",
                     "wss://pingsme.in",
-                    ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(",").map(u => u.trim()) : [])
+                    "https://*.supabase.co",
+                    "wss://*.supabase.co",
+                    "https://*.onrender.com",
+                    "wss://*.onrender.com"
                 ],
-                fontSrc: ["'self'", "https://fonts.gstatic.com"],
+                fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
                 objectSrc: ["'none'"],
-                upgradeInsecureRequests: [],
             },
         },
-        crossOriginEmbedderPolicy: false, // needed for socket.io & agora
+        crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: { policy: "cross-origin" },
         referrerPolicy: { policy: "strict-origin-when-cross-origin" },
     })
 );
@@ -1809,16 +1821,17 @@ app.get("/api/contacts/active", verifyToken, async (req, res) => {
     }
 });
 
-// Search users by username (excluding current user)
+// Search users by username or phone/email (excluding current user)
 app.get("/api/contacts/search", verifyToken, async (req, res) => {
     const { username } = req.query;
-    if (!username) {
+    if (!username || !username.trim()) {
         return res.json([]);
     }
+    const searchTerm = username.trim();
     try {
         const [rows] = await db.query(
-            "SELECT id, username, avatar, bio, is_online, last_seen FROM users WHERE username LIKE ? AND id != ?",
-            [`%${username}%`, req.user.id]
+            "SELECT id, username, email, avatar, bio, is_online, last_seen FROM users WHERE (username LIKE ? OR email LIKE ?) AND id != ?",
+            [`%${searchTerm}%`, `%${searchTerm}%`, req.user.id]
         );
         res.json(rows);
     } catch (err) {
