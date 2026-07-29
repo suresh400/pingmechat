@@ -119,6 +119,9 @@ export const AuthProvider = ({ children }) => {
         console.log(`[sendOtp] Requesting SMS OTP from Supabase for: ${cleanPhone}`);
         const { data, error } = await supabase.auth.signInWithOtp({
             phone: cleanPhone,
+            options: {
+                shouldCreateUser: true,
+            },
         });
 
         if (error) {
