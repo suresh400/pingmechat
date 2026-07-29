@@ -109,16 +109,29 @@ export const AuthProvider = ({ children }) => {
         if (!isSupabaseConfigured) {
             throw new Error("Supabase is not configured. Please add your credentials to the .env file.");
         }
+        const cleanPhone = phone.trim();
         // Clear any old session token cache for this number when requesting a fresh OTP
-        verifiedSupabaseSessions.delete(phone.trim());
+        verifiedSupabaseSessions.delete(cleanPhone);
 
         // Pre-warm the backend in parallel/background so it wakes up
         wakeupBackend(onWarmupStatus).catch(() => {});
 
+        console.log(`[sendOtp] Requesting SMS OTP from Supabase for: ${cleanPhone}`);
         const { data, error } = await supabase.auth.signInWithOtp({
-            phone: phone.trim(),
+            phone: cleanPhone,
         });
-        if (error) throw error;
+
+        if (error) {
+            console.error("[sendOtp] Supabase SMS error details:", error);
+            let userFriendlyMsg = error.message || "Failed to send SMS code.";
+            if (error.status === 429 || userFriendlyMsg.toLowerCase().includes("rate limit")) {
+                userFriendlyMsg = "SMS rate limit reached. Please wait 60 seconds before requesting another code.";
+            } else if (userFriendlyMsg.toLowerCase().includes("twilio") || userFriendlyMsg.toLowerCase().includes("provider")) {
+                userFriendlyMsg = "Twilio SMS Error: Please check Twilio Verified Caller IDs & Geo-Permissions in Supabase Dashboard.";
+            }
+            throw new Error(userFriendlyMsg);
+        }
+        console.log("[sendOtp] Supabase SMS OTP dispatch successful:", data);
         return data;
     }, []);
 
