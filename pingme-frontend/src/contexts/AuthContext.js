@@ -11,27 +11,41 @@ const extractError = (data, fallback) =>
     fallback;
 
 /**
- * Fetch with automatic retry and exponential backoff.
- * Retries only on network errors (no response), not on HTTP error status codes.
+ * Fetch with automatic retry, AbortController timeouts, and exponential backoff.
+ * Retries only on network errors or fetch timeouts, not on HTTP error status codes.
  * @param {string} url
  * @param {RequestInit} options
  * @param {object} retryOpts
- * @param {number} retryOpts.maxAttempts - Total attempts (default 5)
- * @param {number} retryOpts.baseDelayMs - Initial retry delay ms (default 2000)
- * @param {Function} retryOpts.onRetry - Called with (attempt, delayMs) on each retry
+ * @param {number} retryOpts.maxAttempts - Total attempts (default 8)
+ * @param {number} retryOpts.timeoutMs - Timeout per request attempt in ms (default 8000)
+ * @param {number} retryOpts.baseDelayMs - Initial retry delay ms (default 1500)
+ * @param {Function} retryOpts.onRetry - Called with (attempt, statusMsg) on each retry
  */
-const fetchWithRetry = async (url, options = {}, { maxAttempts = 5, baseDelayMs = 2000, onRetry } = {}) => {
+const fetchWithRetry = async (
+    url,
+    options = {},
+    { maxAttempts = 8, timeoutMs = 8000, baseDelayMs = 1500, onRetry } = {}
+) => {
     let lastErr;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-            const res = await fetch(url, options);
+            const res = await fetch(url, {
+                ...options,
+                signal: controller.signal,
+            });
+            clearTimeout(timer);
             return res; // any HTTP response (even 4xx/5xx) — caller handles
         } catch (err) {
+            clearTimeout(timer);
             lastErr = err;
             if (attempt === maxAttempts) break;
-            const delay = baseDelayMs * attempt; // 2s, 4s, 6s, 8s
-            console.warn(`[fetchWithRetry] Attempt ${attempt}/${maxAttempts} failed. Retrying in ${delay}ms…`, err.message);
-            if (onRetry) onRetry(attempt, delay);
+            const isAbort = err.name === "AbortError";
+            const delay = Math.min(baseDelayMs * attempt, 4000);
+            const statusMsg = `Waking up backend server… attempt ${attempt}/${maxAttempts} (${isAbort ? "connecting" : "retrying"})`;
+            console.warn(`[fetchWithRetry] ${statusMsg}:`, err.message);
+            if (onRetry) onRetry(attempt, statusMsg);
             await new Promise((r) => setTimeout(r, delay));
         }
     }
@@ -46,25 +60,33 @@ const fetchWithRetry = async (url, options = {}, { maxAttempts = 5, baseDelayMs 
 const wakeupBackend = async (onStatus) => {
     const pingUrl = `${API_BASE}/ping`;
     for (let i = 1; i <= 6; i++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 6000);
         try {
-            const res = await fetch(pingUrl, { method: "GET" });
+            const res = await fetch(pingUrl, { method: "GET", signal: controller.signal });
+            clearTimeout(timer);
             if (res.ok) {
                 console.log(`[wakeupBackend] Server is awake (attempt ${i})`);
                 return true;
             }
         } catch (_) {
-            // network error — server still waking
+            clearTimeout(timer);
+            // network error or timeout — server still waking
         }
         if (i < 6) {
             const msg = `Server is starting up… (${i}/6)`;
             console.warn("[wakeupBackend]", msg);
             if (onStatus) onStatus(msg);
-            await new Promise((r) => setTimeout(r, i * 2000)); // 2s, 4s, 6s, 8s, 10s
+            await new Promise((r) => setTimeout(r, 1500));
         }
     }
-    // Give up silently — the real request will throw a clear error if still unreachable
+    // Give up silently — the real request will retry with fetchWithRetry
     return false;
 };
+
+// In-memory cache of verified Supabase access tokens by phone number
+// If backend exchange fails on attempt 1, retrying will re-use this token instead of re-calling Supabase verifyOtp (which fails as OTP consumed)
+const verifiedSupabaseSessions = new Map();
 
 export const AuthProvider = ({ children }) => {
 
@@ -87,8 +109,12 @@ export const AuthProvider = ({ children }) => {
         if (!isSupabaseConfigured) {
             throw new Error("Supabase is not configured. Please add your credentials to the .env file.");
         }
-        // Pre-warm the backend so the token exchange after OTP verify succeeds immediately
-        await wakeupBackend(onWarmupStatus);
+        // Clear any old session token cache for this number when requesting a fresh OTP
+        verifiedSupabaseSessions.delete(phone.trim());
+
+        // Pre-warm the backend in parallel/background so it wakes up
+        wakeupBackend(onWarmupStatus).catch(() => {});
+
         const { data, error } = await supabase.auth.signInWithOtp({
             phone: phone.trim(),
         });
@@ -98,23 +124,36 @@ export const AuthProvider = ({ children }) => {
 
     /**
      * verifyOtp — verifies SMS OTP with Supabase then exchanges the session for a backend JWT.
+     * Caches session tokens so retrying connection never fails due to consumed/expired OTPs.
      * @param {string} phone
      * @param {string} code
      * @param {Function} [onRetryStatus] - Called with a human-readable status string on each retry
      */
     const verifyOtp = useCallback(async (phone, code, onRetryStatus) => {
-        // 1. Verify with Supabase
-        const { data, error } = await supabase.auth.verifyOtp({
-            phone: phone.trim(),
-            token: code.trim(),
-            type: "sms",
-        });
-        if (error) throw error;
+        const cleanPhone = phone.trim();
+        let accessToken = verifiedSupabaseSessions.get(cleanPhone);
 
-        const session = data.session;
-        if (!session) throw new Error("No session returned from Supabase authentication.");
+        // 1. If we don't have a cached session from an earlier attempt, verify with Supabase
+        if (!accessToken) {
+            const { data, error } = await supabase.auth.verifyOtp({
+                phone: cleanPhone,
+                token: code.trim(),
+                type: "sms",
+            });
+            if (error) throw error;
 
-        // 2. Exchange Supabase token for backend JWT — with retry for Render cold-starts
+            const session = data.session;
+            if (!session || !session.access_token) {
+                throw new Error("No session returned from Supabase authentication.");
+            }
+            accessToken = session.access_token;
+            // Cache session token in case backend exchange needs retry
+            verifiedSupabaseSessions.set(cleanPhone, accessToken);
+        } else {
+            console.log("[verifyOtp] Using cached verified Supabase session for backend exchange...");
+        }
+
+        // 2. Exchange Supabase token for backend JWT — with fast 8s-timeout retries for Render cold-starts
         let res;
         try {
             res = await fetchWithRetry(
@@ -122,28 +161,37 @@ export const AuthProvider = ({ children }) => {
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ token: session.access_token, phone: phone.trim() }),
+                    body: JSON.stringify({ token: accessToken, phone: cleanPhone }),
                 },
                 {
-                    maxAttempts: 5,
-                    baseDelayMs: 2000,
-                    onRetry: (attempt, delayMs) => {
-                        const msg = `Server is warming up… retrying (${attempt}/4). Please wait.`;
-                        console.warn("[verifyOtp]", msg);
-                        if (onRetryStatus) onRetryStatus(msg);
+                    maxAttempts: 8,
+                    timeoutMs: 8000,
+                    baseDelayMs: 1500,
+                    onRetry: (attempt, statusMsg) => {
+                        console.warn("[verifyOtp]", statusMsg);
+                        if (onRetryStatus) onRetryStatus(statusMsg);
                     },
                 }
             );
         } catch (fetchErr) {
-            console.error("[verifyOtp] All retry attempts failed:", fetchErr);
+            console.error("[verifyOtp] All backend retry attempts failed:", fetchErr);
             throw new Error(
-                "Cannot reach the authentication server after multiple attempts. " +
-                "The server may be temporarily unavailable. Please wait 30 seconds and try again."
+                "Backend server is taking longer than expected to start up. " +
+                "Your OTP is verified! Please wait 10 seconds and click 'Verify & Continue' again to complete login."
             );
         }
 
         const resData = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(extractError(resData, "Authentication exchange failed"));
+        if (!res.ok) {
+            // If backend returned an explicit error (not network error), clear cached session so user can try again
+            if (res.status === 401 || res.status === 400) {
+                verifiedSupabaseSessions.delete(cleanPhone);
+            }
+            throw new Error(extractError(resData, "Authentication exchange failed"));
+        }
+
+        // Success! Clear session cache
+        verifiedSupabaseSessions.delete(cleanPhone);
 
         localStorage.setItem("chatapp_token", resData.token);
         localStorage.setItem("chatapp_user", JSON.stringify(resData.user));

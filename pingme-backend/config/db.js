@@ -16,7 +16,10 @@ const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {
   console.error("[DB] MONGODB_URI is not set in .env!");
 } else {
-  mongoose.connect(MONGODB_URI)
+  mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 5000, // Fail fast after 5s if MongoDB Atlas is unreachable
+    connectTimeoutMS: 10000,
+  })
     .then(() => console.log("[DB] Connected to MongoDB Atlas successfully via Mongoose"))
     .catch(err => console.error("[DB] MongoDB connection error:", err.message));
 }

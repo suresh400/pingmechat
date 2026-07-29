@@ -2627,11 +2627,19 @@ async function ensureAdminUser() {
     } catch (err) {
         console.error("[Admin] Error ensuring Admin user:", err);
     }
-}
+// Process-level safety handlers to prevent process crashes
+process.on("unhandledRejection", (reason, promise) => {
+    console.error("[Process] Unhandled Rejection at:", promise, "reason:", reason);
+});
+process.on("uncaughtException", (err) => {
+    console.error("[Process] Uncaught Exception thrown:", err);
+});
 
-server.listen(PORT, async () => {
+server.listen(PORT, () => {
     console.log(`PingMe server running on port ${PORT}`);
-    await ensureAdminUser();
+    // Non-blocking admin user initialization
+    ensureAdminUser().catch(err => console.error("[Admin] ensureAdminUser background error:", err.message));
+
     // Start self-destruct periodic cleanup job
     setInterval(() => {
         if (db.cleanExpiredMessages) {
@@ -2639,3 +2647,4 @@ server.listen(PORT, async () => {
         }
     }, 5000);
 });
+
