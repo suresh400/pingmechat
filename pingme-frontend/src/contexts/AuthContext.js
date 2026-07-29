@@ -153,7 +153,7 @@ export const AuthProvider = ({ children }) => {
             console.log("[verifyOtp] Using cached verified Supabase session for backend exchange...");
         }
 
-        // 2. Exchange Supabase token for backend JWT — with fast 8s-timeout retries for Render cold-starts
+        // 2. Exchange Supabase token for backend JWT — with fast 5s-timeout retries for Render cold-starts
         let res;
         try {
             res = await fetchWithRetry(
@@ -164,20 +164,20 @@ export const AuthProvider = ({ children }) => {
                     body: JSON.stringify({ token: accessToken, phone: cleanPhone }),
                 },
                 {
-                    maxAttempts: 8,
-                    timeoutMs: 8000,
-                    baseDelayMs: 1500,
+                    maxAttempts: 15,
+                    timeoutMs: 5000,
+                    baseDelayMs: 1000,
                     onRetry: (attempt, statusMsg) => {
-                        console.warn("[verifyOtp]", statusMsg);
-                        if (onRetryStatus) onRetryStatus(statusMsg);
+                        const friendlyMsg = `Connecting to authentication server… (Attempt ${attempt}/15). Please wait.`;
+                        console.warn("[verifyOtp]", friendlyMsg);
+                        if (onRetryStatus) onRetryStatus(friendlyMsg);
                     },
                 }
             );
         } catch (fetchErr) {
             console.error("[verifyOtp] All backend retry attempts failed:", fetchErr);
             throw new Error(
-                "Backend server is taking longer than expected to start up. " +
-                "Your OTP is verified! Please wait 10 seconds and click 'Verify & Continue' again to complete login."
+                "Authentication server is still initializing. Your OTP is verified! Please wait 5 seconds and click 'Verify & Continue' to complete your login."
             );
         }
 
