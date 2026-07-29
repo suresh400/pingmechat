@@ -156,7 +156,14 @@ export const AuthProvider = ({ children }) => {
                 token: code.trim(),
                 type: "sms",
             });
-            if (error) throw error;
+            if (error) {
+                console.error("[verifyOtp] Supabase OTP verification failed:", error);
+                let msg = error.message || "Invalid verification code.";
+                if (msg.toLowerCase().includes("invalid") || msg.toLowerCase().includes("expired") || msg.toLowerCase().includes("token")) {
+                    msg = "The verification code entered is incorrect or expired. Please enter the code received via SMS or click 'Resend Code'.";
+                }
+                throw new Error(msg);
+            }
 
             const session = data.session;
             if (!session || !session.access_token) {
