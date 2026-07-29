@@ -52,6 +52,14 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
   const [success, setSuccess] = useState("");
   const [userCount, setUserCount] = useState(null);
 
+  // OTP countdown timer — 5 minutes (300 seconds), matches Supabase OTP TTL
+  const OTP_TTL = 300;
+  const [otpSecondsLeft, setOtpSecondsLeft] = useState(OTP_TTL);
+  const [otpExpired, setOtpExpired] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0); // seconds before resend is allowed
+  const timerRef = useRef(null);
+  const resendTimerRef = useRef(null);
+
   // Profile data for existing / new users
   const [existingUserData, setExistingUserData] = useState(null);
   const [newUsername, setNewUsername] = useState("");
@@ -95,8 +103,35 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
       setUsernameAvailable(null);
       setAvatarUrl("");
       setUploadingAvatar(false);
+      clearInterval(timerRef.current);
+      clearInterval(resendTimerRef.current);
     }
   }, [open]);
+
+  // Start 5-min countdown when OTP step begins
+  useEffect(() => {
+    if (step !== "otp") {
+      clearInterval(timerRef.current);
+      return;
+    }
+    setOtpSecondsLeft(OTP_TTL);
+    setOtpExpired(false);
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setOtpSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          setOtpExpired(true);
+          setOtp("");
+          setError("Your verification code has expired. Please request a new one.");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timerRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // Debounced check for username availability in database
   useEffect(() => {
@@ -125,6 +160,20 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
     return () => clearTimeout(timer);
   }, [newUsername, step]);
 
+  const startResendCooldown = () => {
+    setResendCooldown(30);
+    clearInterval(resendTimerRef.current);
+    resendTimerRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(resendTimerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   const handleSendCode = async (e) => {
     if (e) e.preventDefault();
     setError("");
@@ -150,14 +199,49 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
     try {
       await sendOtp(fullPhone);
       setStep("otp");
-      setSuccess(`A 6-digit verification code has been sent to ${fullPhone}.`);
+      setSuccess(`A 6-digit verification code has been sent to ${fullPhone}. It expires in 5 minutes.`);
+      startResendCooldown();
     } catch (err) {
       console.error("Failed to send OTP:", err);
       let errMsg = err.message || "Failed to send verification code.";
       if (errMsg.toLowerCase().includes("sms provider") || errMsg.toLowerCase().includes("provider")) {
-        errMsg = "SMS Provider error. If using Supabase, please verify that Phone Auth and Twilio/SMS provider settings are configured in the Supabase Dashboard.";
+        errMsg = "SMS Provider error. Please verify Phone Auth and Twilio settings are configured in the Supabase Dashboard.";
       }
       setError(errMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (resendCooldown > 0) return;
+    setError("");
+    setSuccess("");
+    setOtp("");
+    setOtpExpired(false);
+    setLoading(true);
+    try {
+      await sendOtp(phone);
+      setSuccess(`A new 6-digit code has been sent to ${phone}. It expires in 5 minutes.`);
+      startResendCooldown();
+      // Restart the 5-min countdown
+      setOtpSecondsLeft(OTP_TTL);
+      clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setOtpSecondsLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current);
+            setOtpExpired(true);
+            setOtp("");
+            setError("Your verification code has expired. Please request a new one.");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err) {
+      console.error("Failed to resend OTP:", err);
+      setError(err.message || "Failed to resend code. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -426,74 +510,121 @@ export default function AuthModal({ open, onClose, initialMode = "login" }) {
         )}
 
         {/* ── STEP 2: OTP VERIFICATION ── */}
-        {step === "otp" && (
-          <form onSubmit={handleVerifyCode}>
-            <Stack spacing={2.5}>
-              <Typography variant="body2" align="center" sx={{ color: "rgba(255, 255, 255, 0.6)" }}>
-                Enter the 6-digit code sent to <strong style={{ color: "#fff" }}>{phone}</strong>
-              </Typography>
-              <TextField
-                label="6-Digit OTP Code"
-                name="otp"
-                fullWidth
-                required
-                placeholder="123456"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                variant="outlined"
-                size="small"
-                sx={{
-                  "& .MuiInputBase-input": { color: "#fff", letterSpacing: 4, textAlign: "center", fontSize: 18, fontWeight: 700 },
-                  "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
-                  "& .MuiInputLabel-root.Mui-focused": { color: "#fff" },
-                  "& .MuiOutlinedInput-root": {
-                    "& fieldset": { borderColor: "rgba(255, 255, 255, 0.15)" },
-                    "&:hover fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-                    "&.Mui-focused fieldset": { borderColor: "#fff" },
-                  },
-                }}
-              />
-              <Button
-                type="submit"
-                variant="contained"
-                fullWidth
-                disabled={loading || otp.length !== 6}
-                sx={{
-                  backgroundColor: "#fff",
-                  color: "#000",
-                  borderRadius: 50,
-                  py: 1.2,
-                  fontWeight: 800,
-                  textTransform: "none",
-                  fontSize: 15,
-                  "&:hover": { backgroundColor: "#e5e5e5" },
-                  "&.Mui-disabled": { backgroundColor: "rgba(255, 255, 255, 0.3)", color: "rgba(0,0,0,0.5)" }
-                }}
-              >
-                {loading ? <CircularProgress size={22} color="inherit" /> : "Verify & Continue"}
-              </Button>
-              <Stack direction="row" justifyContent="space-between" mt={1}>
-                <Link
-                  component="button"
-                  type="button"
-                  onClick={() => handleSendCode(null)}
-                  disabled={loading}
-                  sx={{ color: "#3B82F6", fontWeight: 700, fontSize: 13, textDecoration: "none", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}
+        {step === "otp" && (() => {
+          const pct = otpSecondsLeft / OTP_TTL; // 1.0 → 0.0
+          const mins = String(Math.floor(otpSecondsLeft / 60)).padStart(2, "0");
+          const secs = String(otpSecondsLeft % 60).padStart(2, "0");
+          const timerColor = otpSecondsLeft > 60 ? "#4CAF50" : otpSecondsLeft > 20 ? "#FF9800" : "#F44336";
+          const radius = 22;
+          const circ = 2 * Math.PI * radius;
+          return (
+            <form onSubmit={handleVerifyCode}>
+              <Stack spacing={2.5}>
+                <Typography variant="body2" align="center" sx={{ color: "rgba(255, 255, 255, 0.6)" }}>
+                  Enter the 6-digit code sent to <strong style={{ color: "#fff" }}>{phone}</strong>
+                </Typography>
+
+                {/* Countdown ring + timer */}
+                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 1.5 }}>
+                  <Box sx={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}>
+                    <svg width="56" height="56" style={{ transform: "rotate(-90deg)" }}>
+                      <circle cx="28" cy="28" r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
+                      <circle
+                        cx="28" cy="28" r={radius} fill="none"
+                        stroke={otpExpired ? "#F44336" : timerColor}
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeDasharray={circ}
+                        strokeDashoffset={circ * (1 - pct)}
+                        style={{ transition: "stroke-dashoffset 1s linear, stroke 0.5s" }}
+                      />
+                    </svg>
+                    <Box sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Typography sx={{ fontSize: 11, fontWeight: 800, color: otpExpired ? "#F44336" : timerColor, fontFamily: "monospace", lineHeight: 1 }}>
+                        {otpExpired ? "EXP" : `${mins}:${secs}`}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Typography variant="caption" sx={{ color: otpExpired ? "#F44336" : "rgba(255,255,255,0.5)", fontWeight: 600, lineHeight: 1.4 }}>
+                    {otpExpired
+                      ? "Code expired. Request a new one below."
+                      : `Code expires in ${mins}:${secs}. Enter it before the timer runs out.`}
+                  </Typography>
+                </Box>
+
+                <TextField
+                  label="6-Digit OTP Code"
+                  name="otp"
+                  fullWidth
+                  required
+                  placeholder="123456"
+                  value={otp}
+                  disabled={otpExpired}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  variant="outlined"
+                  size="small"
+                  sx={{
+                    "& .MuiInputBase-input": { color: "#fff", letterSpacing: 4, textAlign: "center", fontSize: 18, fontWeight: 700 },
+                    "& .MuiInputLabel-root": { color: "rgba(255,255,255,0.6)" },
+                    "& .MuiInputLabel-root.Mui-focused": { color: "#fff" },
+                    "& .MuiOutlinedInput-root": {
+                      "& fieldset": { borderColor: otpExpired ? "rgba(244,67,54,0.4)" : "rgba(255, 255, 255, 0.15)" },
+                      "&:hover fieldset": { borderColor: otpExpired ? "rgba(244,67,54,0.6)" : "rgba(255, 255, 255, 0.3)" },
+                      "&.Mui-focused fieldset": { borderColor: "#fff" },
+                    },
+                  }}
+                />
+
+                <Button
+                  type="submit"
+                  variant="contained"
+                  fullWidth
+                  disabled={loading || otp.length !== 6 || otpExpired}
+                  sx={{
+                    backgroundColor: "#fff",
+                    color: "#000",
+                    borderRadius: 50,
+                    py: 1.2,
+                    fontWeight: 800,
+                    textTransform: "none",
+                    fontSize: 15,
+                    "&:hover": { backgroundColor: "#e5e5e5" },
+                    "&.Mui-disabled": { backgroundColor: "rgba(255, 255, 255, 0.3)", color: "rgba(0,0,0,0.5)" }
+                  }}
                 >
-                  Resend Code
-                </Link>
-                <Link
-                  component="button"
-                  type="button"
-                  onClick={handleBackToPhone}
-                  sx={{ color: "rgba(255,255,255,0.5)", fontWeight: 700, fontSize: 13, textDecoration: "none", cursor: "pointer", "&:hover": { color: "#fff" } }}
-                >
-                  Change Phone Number
-                </Link>
+                  {loading ? <CircularProgress size={22} color="inherit" /> : "Verify & Continue"}
+                </Button>
+
+                <Stack direction="row" justifyContent="space-between" mt={0.5}>
+                  <Box>
+                    <Link
+                      component="button"
+                      type="button"
+                      onClick={handleResendCode}
+                      disabled={loading || resendCooldown > 0}
+                      sx={{
+                        color: resendCooldown > 0 ? "rgba(255,255,255,0.3)" : "#3B82F6",
+                        fontWeight: 700, fontSize: 13, textDecoration: "none",
+                        cursor: resendCooldown > 0 ? "not-allowed" : "pointer",
+                        "&:hover": { textDecoration: resendCooldown > 0 ? "none" : "underline" }
+                      }}
+                    >
+                      {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}
+                    </Link>
+                  </Box>
+                  <Link
+                    component="button"
+                    type="button"
+                    onClick={handleBackToPhone}
+                    sx={{ color: "rgba(255,255,255,0.5)", fontWeight: 700, fontSize: 13, textDecoration: "none", cursor: "pointer", "&:hover": { color: "#fff" } }}
+                  >
+                    Change Number
+                  </Link>
+                </Stack>
               </Stack>
-            </Stack>
-          </form>
-        )}
+            </form>
+          );
+        })()}
 
         {/* ── STEP 3: EXISTING USER CARD ── */}
         {step === "existing_user" && existingUserData && (
