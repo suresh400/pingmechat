@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Box, Stack, Avatar, Typography, InputBase, IconButton,
   Divider, Tooltip, Chip, CircularProgress, Snackbar, Alert, Menu, MenuItem,
@@ -288,6 +288,22 @@ const GeneralApp = () => {
       setActiveConversations([]);
     }
   }, [currentUser?.id]);
+
+  const filteredActiveConversations = useMemo(() => {
+    if (!search.trim()) return activeConversations;
+    const term = search.toLowerCase().trim();
+    const cleanTerm = term.replace(/\D/g, "");
+    return activeConversations.filter(conv => {
+      const usernameMatch = conv.username?.toLowerCase().includes(term);
+      const bioMatch = conv.bio?.toLowerCase().includes(term);
+      const emailMatch = conv.email?.toLowerCase().includes(term);
+      const phoneMatch = cleanTerm.length >= 3 && (
+        conv.username?.replace(/\D/g, "").includes(cleanTerm) || 
+        conv.email?.replace(/\D/g, "").includes(cleanTerm)
+      );
+      return usernameMatch || bioMatch || emailMatch || phoneMatch;
+    });
+  }, [activeConversations, search]);
 
   // ── Get global call state from DashboardLayout via Outlet context ──────────
   const outletCtx = useOutletContext() || {};
@@ -788,13 +804,15 @@ const GeneralApp = () => {
             )}
 
             {/* Active Conversations */}
-            <Typography variant="caption" color="text.secondary" sx={{ ml: 1.5, mb: 1, display: "block", fontWeight: 600, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.5 }}>All Messages</Typography>
-            {activeConversations.length === 0 && !hasSearched ? (
+            <Typography variant="caption" color="text.secondary" sx={{ ml: 1.5, mb: 1, display: "block", fontWeight: 600, textTransform: "uppercase", fontSize: 10, letterSpacing: 0.5 }}>
+              {search.trim() ? "Matching Previous Chats" : "All Messages"}
+            </Typography>
+            {filteredActiveConversations.length === 0 && !hasSearched ? (
               <Box sx={{ textAlign: "center", mt: 8, px: 2 }}>
                 <MagnifyingGlass size={36} color="#ccc" />
                 <Typography variant="body2" color="text.secondary" mt={1}>Search for someone to start a conversation</Typography>
               </Box>
-            ) : activeConversations.map((conv) => (
+            ) : filteredActiveConversations.map((conv) => (
               <Box
                 key={conv.id}
                 onClick={() => handleSelectContact(conv)}

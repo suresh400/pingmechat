@@ -1828,13 +1828,26 @@ app.get("/api/contacts/search", verifyToken, async (req, res) => {
         return res.json([]);
     }
     const searchTerm = username.trim();
+    const cleanDigits = searchTerm.replace(/\D/g, "");
     try {
-        const [rows] = await db.query(
-            "SELECT id, username, email, avatar, bio, is_online, last_seen FROM users WHERE (username LIKE ? OR email LIKE ?) AND id != ?",
-            [`%${searchTerm}%`, `%${searchTerm}%`, req.user.id]
-        );
+        let sql = `SELECT id, username, email, avatar, bio, is_online, last_seen FROM users WHERE id != ?`;
+        let params = [req.user.id];
+
+        if (cleanDigits.length >= 3) {
+            sql += ` AND (username LIKE ? OR email LIKE ? OR REPLACE(REPLACE(username, '+', ''), ' ', '') LIKE ? OR REPLACE(REPLACE(email, '+', ''), ' ', '') LIKE ?)`;
+            const pattern = `%${searchTerm}%`;
+            const digitPattern = `%${cleanDigits}%`;
+            params.push(pattern, pattern, digitPattern, digitPattern);
+        } else {
+            sql += ` AND (username LIKE ? OR email LIKE ?)`;
+            const pattern = `%${searchTerm}%`;
+            params.push(pattern, pattern);
+        }
+
+        const [rows] = await db.query(sql, params);
         res.json(rows);
     } catch (err) {
+        console.error("Search query error:", err);
         res.status(500).json({ message: err.message });
     }
 });
@@ -2225,7 +2238,7 @@ app.get("/api/messages/unread/total", verifyToken, async (req, res) => {
 // ─── MESSAGES ────────────────────────────────────────────────────────────────
 app.get("/api/messages/:contactId", verifyToken, async (req, res) => {
     const { contactId } = req.params;
-    if (isNaN(Number(contactId))) {
+    if (!contactId) {
         return res.status(400).json({ message: "Invalid contact ID." });
     }
     const userId = req.user.id;
