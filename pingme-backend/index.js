@@ -2627,6 +2627,8 @@ async function ensureAdminUser() {
     } catch (err) {
         console.error("[Admin] Error ensuring Admin user:", err);
     }
+}
+
 // Process-level safety handlers to prevent process crashes
 process.on("unhandledRejection", (reason, promise) => {
     console.error("[Process] Unhandled Rejection at:", promise, "reason:", reason);
