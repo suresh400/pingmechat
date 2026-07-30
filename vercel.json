@@ -1,9 +1,9 @@
 {
-  "buildCommand": "cd pingme-frontend && npm install && npm run build",
+  "installCommand": "cd pingme-frontend && npm install --prefer-offline --no-audit",
+  "buildCommand": "cd pingme-frontend && npm run build",
   "outputDirectory": "pingme-frontend/build",
-  "installCommand": "cd pingme-frontend && npm install",
   "framework": "create-react-app",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!static|.*\\..*$).*)", "destination": "/index.html" }
   ]
 }

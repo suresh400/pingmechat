@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cd pingme-frontend && npm install && npm run build",
-    "start": "cd pingme-frontend && npm start"
+    "build": "cd pingme-frontend && npm run build"
   }
 }
