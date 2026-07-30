@@ -263,7 +263,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const authFetch = useCallback(
-        (url, options = {}) => {
+        async (url, options = {}, retries = 2) => {
             const headers = {
                 Authorization: `Bearer ${token}`,
                 ...(options.headers || {}),
@@ -274,10 +274,19 @@ export const AuthProvider = ({ children }) => {
                 headers["Content-Type"] = "application/json";
             }
 
-            return fetch(url, {
-                ...options,
-                headers,
-            });
+            for (let i = 0; i <= retries; i++) {
+                try {
+                    const res = await fetch(url, {
+                        ...options,
+                        headers,
+                    });
+                    return res;
+                } catch (err) {
+                    if (i === retries) throw err;
+                    // Short backoff delay for Render cold starts / network glitch
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+            }
         },
         [token]
     );

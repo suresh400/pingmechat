@@ -155,7 +155,9 @@ const corsOptions = {
         } catch (e) {}
         return callback(null, true);
     },
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
 };
 
 const app = express();
@@ -163,13 +165,14 @@ const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
         ...corsOptions,
-        methods: ["GET", "POST"]
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     },
 });
 
 const PORT = process.env.PORT || 5000;
 
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json());
 
 // ── Security Headers ───────────────────────────────────────────────────────────
@@ -256,6 +259,10 @@ if (SELF_URL) {
 app.get("/uploads/:filename", async (req, res, next) => {
     try {
         const { filename } = req.params;
+        const localPath = path.join(__dirname, "uploads", filename);
+        if (fs.existsSync(localPath)) {
+            return res.sendFile(localPath);
+        }
         const attachment = await db.getAttachment(filename);
         if (!attachment) {
             return res.status(404).send("File not found");
@@ -2355,22 +2362,27 @@ app.post("/api/messages", verifyToken, validateSendMessage, async (req, res) => 
 // ─── GROUPS ──────────────────────────────────────────────────────────────────
 app.post("/api/groups", verifyToken, async (req, res) => {
     const { name, memberUsernames } = req.body;
-    if (!name) return res.status(400).json({ message: "Group name required." });
+    if (!name || !name.trim()) return res.status(400).json({ message: "Group name required." });
     try {
-        const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${name}`;
+        const groupName = name.trim();
+        const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(groupName)}`;
         const [groupResult] = await db.query(
             "INSERT INTO groups_table (name, created_by, avatar) VALUES (?, ?, ?)",
-            [name, req.user.id, avatarUrl]
+            [groupName, req.user.id, avatarUrl]
         );
         const groupId = groupResult.insertId;
 
         // Add creator
         await db.query("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)", [groupId, req.user.id]);
 
-        // Add members by username
-        if (memberUsernames && memberUsernames.length > 0) {
+        // Add members by username, email, or ID
+        if (Array.isArray(memberUsernames) && memberUsernames.length > 0) {
             for (const uname of memberUsernames) {
-                const [users] = await db.query("SELECT id FROM users WHERE username = ?", [uname]);
+                if (!uname) continue;
+                const [users] = await db.query(
+                    "SELECT id FROM users WHERE username = ? OR email = ? OR id = ?",
+                    [uname, uname, uname]
+                );
                 if (users.length > 0) {
                     await db.query(
                         "INSERT IGNORE INTO group_members (group_id, user_id) VALUES (?, ?)",
@@ -2379,8 +2391,9 @@ app.post("/api/groups", verifyToken, async (req, res) => {
                 }
             }
         }
-        res.status(201).json({ id: groupId, name, avatar: avatarUrl });
+        res.status(201).json({ id: groupId, name: groupName, avatar: avatarUrl });
     } catch (err) {
+        console.error("Create group error:", err);
         res.status(500).json({ message: err.message });
     }
 });
