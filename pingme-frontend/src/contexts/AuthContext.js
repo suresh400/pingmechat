@@ -232,12 +232,24 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = useCallback(async (email, password) => {
-        const res = await fetch(`${API_BASE}/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
-        });
-        const resData = await res.json();
+        let res = null;
+        let lastErr = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                res = await fetch(`${API_BASE}/auth/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password }),
+                });
+                if (res) break;
+            } catch (err) {
+                lastErr = err;
+                if (attempt < 3) await new Promise(r => setTimeout(r, 1000));
+            }
+        }
+        if (!res) throw lastErr || new Error("Failed to connect to server. Please try again.");
+
+        const resData = await res.json().catch(() => ({ message: "Invalid server response." }));
         if (!res.ok) throw new Error(extractError(resData, "Login failed"));
 
         localStorage.setItem("chatapp_token", resData.token);

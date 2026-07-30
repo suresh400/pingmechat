@@ -176,39 +176,10 @@ app.options("*", cors(corsOptions));
 app.use(express.json());
 
 // ── Security Headers ───────────────────────────────────────────────────────────
-// Use helmet with a custom CSP that allows our frontend origins and necessary CDNs
+// Use helmet without enforcing backend CSP (frontend CSP is handled by Cloudflare/HTML)
 app.use(
     helmet({
-        contentSecurityPolicy: {
-            directives: {
-                defaultSrc: ["'self'", "*"],
-                scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-                styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-                imgSrc: [
-                    "'self'",
-                    "data:",
-                    "blob:",
-                    "https://api.dicebear.com",
-                    "https://res.cloudinary.com",
-                    "https://lh3.googleusercontent.com",
-                    "*"
-                ],
-                connectSrc: [
-                    "'self'",
-                    "*",
-                    "https://www.pingsme.in",
-                    "https://pingsme.in",
-                    "wss://www.pingsme.in",
-                    "wss://pingsme.in",
-                    "https://*.supabase.co",
-                    "wss://*.supabase.co",
-                    "https://*.onrender.com",
-                    "wss://*.onrender.com"
-                ],
-                fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-                objectSrc: ["'none'"],
-            },
-        },
+        contentSecurityPolicy: false,
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: { policy: "cross-origin" },
         referrerPolicy: { policy: "strict-origin-when-cross-origin" },
@@ -1713,13 +1684,16 @@ app.post("/api/upload", verifyToken, upload.single("file"), async (req, res) => 
     }
 
     // Local file storage fallback (when Cloudinary is unconfigured or fails)
-    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    const proto = req.get("x-forwarded-proto") || req.protocol || "https";
+    const host = req.get("host");
+    const scheme = proto.includes("https") ? "https" : (req.secure ? "https" : "http");
+    const fileUrl = `${scheme}://${host}/uploads/${req.file.filename}`;
     try {
         await db.saveAttachment(req.file.filename, req.file.mimetype, fileUrl);
     } catch (dbErr) {
         console.error("[Upload] Save attachment error:", dbErr.message);
     }
-    console.log("[Upload] Local storage upload success:", fileUrl);
+    console.log("[Upload] Storage upload success:", fileUrl);
     return res.json({ url: fileUrl });
 });
 
