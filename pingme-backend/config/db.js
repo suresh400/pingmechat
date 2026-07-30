@@ -178,7 +178,6 @@ const ReportSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 const Report = mongoose.model("Report", ReportSchema);
-const Report = mongoose.model("Report", ReportSchema);
 
 const SuggestionSchema = new mongoose.Schema({
   id: { type: Number },
