@@ -1,0 +1,9 @@
+{
+  "buildCommand": "cd pingme-frontend && npm install && npm run build",
+  "outputDirectory": "pingme-frontend/build",
+  "installCommand": "cd pingme-frontend && npm install",
+  "framework": "create-react-app",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
