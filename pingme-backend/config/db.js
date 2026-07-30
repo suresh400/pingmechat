@@ -24,6 +24,20 @@ if (!MONGODB_URI) {
     .catch(err => console.error("[DB] MongoDB connection error:", err.message));
 }
 
+// Helper to safely convert an identifier (ID) to a number if numeric, or keep as string, avoiding NaN
+function safeId(val) {
+  if (val === undefined || val === null) return 0;
+  const num = Number(val);
+  if (!isNaN(num)) return num;
+  if (typeof val === "string" && val.trim().length > 0) return val.trim();
+  return 0;
+}
+
+function safeIds(arr) {
+  if (!Array.isArray(arr)) return [safeId(arr)];
+  return arr.map(safeId);
+}
+
 // ── Schemas & Models ─────────────────────────────────────────────────────────
 
 const CounterSchema = new mongoose.Schema({
@@ -277,7 +291,7 @@ mongoose.connection.once("open", () => {
 
 async function activeContacts(userId) {
   const user = await resolveUserById(userId);
-  const uid = user ? user.id : (isNaN(Number(userId)) ? null : Number(userId));
+  const uid = user ? user.id : safeId(userId);
   if (!uid) return [];
 
   const messages = await Message.find({ $or: [{ sender_id: uid }, { receiver_id: uid }] }).lean();
@@ -320,8 +334,8 @@ async function activeContacts(userId) {
 async function messageHistory(uid, cid) {
   const userU = await resolveUserById(uid);
   const userC = await resolveUserById(cid);
-  const u = userU ? userU.id : (isNaN(Number(uid)) ? null : Number(uid));
-  const c = userC ? userC.id : (isNaN(Number(cid)) ? null : Number(cid));
+  const u = userU ? userU.id : safeId(uid);
+  const c = userC ? userC.id : safeId(cid);
 
   if (!u || !c) {
     return [];
@@ -398,7 +412,7 @@ async function messageHistory(uid, cid) {
 }
 
 async function callLogWithUsers(id) {
-  const numId = isNaN(Number(id)) ? 0 : Number(id);
+  const numId = safeId(id);
   const cl = await CallLog.findOne({ id: numId }).lean();
   if (!cl) return [];
   const u1 = await User.findOne({ id: cl.caller_id }).lean() || {};
@@ -417,7 +431,7 @@ async function callLogWithUsers(id) {
 
 async function callHistory(userId) {
   const user = await resolveUserById(userId);
-  const uid = user ? user.id : (isNaN(Number(userId)) ? null : Number(userId));
+  const uid = user ? user.id : safeId(userId);
   if (!uid) return [];
 
   const myGroupMemberships = await GroupMember.find({ user_id: uid }).lean();
@@ -829,8 +843,8 @@ async function handleInsert(sl, p) {
 
 // Helper: resolve a user document by id (numeric) or fall back to email/username for Supabase UUID ids
 async function resolveUserById(rawId) {
-  const numId = Number(rawId);
-  if (!isNaN(numId) && numId > 0) {
+  const numId = safeId(rawId);
+  if (typeof numId === "number" && numId > 0) {
     const u = await User.findOne({ id: numId }).lean();
     if (u) return u;
   }
