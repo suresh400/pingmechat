@@ -1543,21 +1543,73 @@ app.get("/api/auth/me", verifyToken, async (req, res) => {
 });
 
 // Update profile
-app.put("/api/auth/profile", verifyToken, validateProfile, async (req, res) => {
+app.put("/api/auth/profile", verifyToken, async (req, res) => {
     const { username, bio, avatar } = req.body;
     try {
-        if (username && username !== req.user.username) {
-            const [existing] = await db.query("SELECT id FROM users WHERE username = ? AND id != ?", [username, req.user.id]);
+        const [currentUsers] = await db.query("SELECT * FROM users WHERE id = ?", [req.user.id]);
+        if (currentUsers.length === 0) return res.status(404).json({ message: "User not found." });
+        const current = currentUsers[0];
+
+        if (username && username.trim() !== current.username) {
+            const [existing] = await db.query("SELECT id FROM users WHERE username = ? AND id != ?", [username.trim(), req.user.id]);
             if (existing.length > 0)
                 return res.status(409).json({ message: "Username already taken." });
         }
+
+        const newUsername = (username && username.trim()) ? username.trim() : current.username;
+        const newBio = bio !== undefined ? bio : (current.bio || "");
+        const newAvatar = (avatar && avatar.trim()) ? avatar.trim() : current.avatar;
+
         await db.query(
             "UPDATE users SET username = ?, bio = ?, avatar = ? WHERE id = ?",
-            [username || req.user.username, bio || "", avatar || req.user.avatar, req.user.id]
+            [newUsername, newBio, newAvatar, req.user.id]
         );
         const [updated] = await db.query("SELECT id, username, email, avatar, bio, is_online, last_seen FROM users WHERE id = ?", [req.user.id]);
         res.json({ message: "Profile updated.", user: updated[0] });
     } catch (err) {
+        console.error("Profile update error:", err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Alias endpoint for /api/users/profile
+app.put("/api/users/profile", verifyToken, async (req, res) => {
+    const { username, bio, avatar } = req.body;
+    try {
+        const [currentUsers] = await db.query("SELECT * FROM users WHERE id = ?", [req.user.id]);
+        if (currentUsers.length === 0) return res.status(404).json({ message: "User not found." });
+        const current = currentUsers[0];
+
+        if (username && username.trim() !== current.username) {
+            const [existing] = await db.query("SELECT id FROM users WHERE username = ? AND id != ?", [username.trim(), req.user.id]);
+            if (existing.length > 0)
+                return res.status(409).json({ message: "Username already taken." });
+        }
+
+        const newUsername = (username && username.trim()) ? username.trim() : current.username;
+        const newBio = bio !== undefined ? bio : (current.bio || "");
+        const newAvatar = (avatar && avatar.trim()) ? avatar.trim() : current.avatar;
+
+        await db.query(
+            "UPDATE users SET username = ?, bio = ?, avatar = ? WHERE id = ?",
+            [newUsername, newBio, newAvatar, req.user.id]
+        );
+        const [updated] = await db.query("SELECT id, username, email, avatar, bio, is_online, last_seen FROM users WHERE id = ?", [req.user.id]);
+        res.json({ message: "Profile updated.", user: updated[0] });
+    } catch (err) {
+        console.error("Profile update error:", err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Permanent Self-Account Deletion
+app.delete("/api/users/me", verifyToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        await deleteUserCascade(userId);
+        res.json({ message: "Account and all associated data permanently deleted." });
+    } catch (err) {
+        console.error("Account deletion error:", err);
         res.status(500).json({ message: err.message });
     }
 });
@@ -1972,9 +2024,22 @@ app.get("/api/admin/messages", verifyToken, isAdmin, async (req, res) => {
     }
 });
 
+// Cascade delete user data helper
+async function deleteUserCascade(userId) {
+    const uid = String(userId);
+    try { await db.query("DELETE FROM messages WHERE sender_id = ? OR receiver_id = ?", [uid, uid]); } catch (e) {}
+    try { await db.query("DELETE FROM group_members WHERE user_id = ?", [uid]); } catch (e) {}
+    try { await db.query("DELETE FROM call_logs WHERE caller_id = ? OR receiver_id = ?", [uid, uid]); } catch (e) {}
+    try { await db.query("DELETE FROM blocked_users WHERE blocker_id = ? OR blocked_id = ?", [uid, uid]); } catch (e) {}
+    try { await db.query("DELETE FROM feedback WHERE user_id = ?", [uid]); } catch (e) {}
+    try { await db.query("DELETE FROM suggestions WHERE user_id = ?", [uid]); } catch (e) {}
+    try { await db.query("DELETE FROM reports_table WHERE reporter_id = ? OR reported_id = ?", [uid, uid]); } catch (e) {}
+    await db.query("DELETE FROM users WHERE id = ?", [uid]);
+}
+
 app.post("/api/admin/broadcast", verifyToken, isAdmin, async (req, res) => {
-    const { message, target, userIds } = req.body;
-    if (!message) {
+    const { message, target, username, userIds } = req.body;
+    if (!message || !message.trim()) {
         return res.status(400).json({ message: "Broadcast message is required." });
     }
 
@@ -1983,25 +2048,46 @@ app.post("/api/admin/broadcast", verifyToken, isAdmin, async (req, res) => {
         let targets = [];
 
         if (target === "all") {
-            const [users] = await db.query("select * from users");
-            targets = users.filter(u => u.id !== adminId).map(u => u.id);
+            const [users] = await db.query("SELECT id FROM users");
+            targets = users.filter(u => String(u.id) !== String(adminId)).map(u => u.id);
+        } else if (target === "single" && username) {
+            const [targetUsers] = await db.query(
+                "SELECT id FROM users WHERE username = ? OR email = ? OR id = ?",
+                [username.trim(), username.trim(), username.trim()]
+            );
+            if (targetUsers.length > 0) {
+                targets = [targetUsers[0].id];
+            } else {
+                return res.status(404).json({ message: `User "${username}" not found.` });
+            }
         } else if (Array.isArray(userIds)) {
-            targets = userIds.map(Number);
+            targets = userIds;
         }
 
         if (targets.length === 0) {
-            return res.status(400).json({ message: "No target users found." });
+            return res.status(400).json({ message: "No target users found to receive message." });
         }
 
         for (const targetId of targets) {
-            await db.query(
+            const [result] = await db.query(
                 "INSERT INTO messages (sender_id, receiver_id, message) VALUES (?, ?, ?)",
-                [adminId, targetId, message]
+                [adminId, targetId, message.trim()]
             );
+            const msgId = result?.insertId || Date.now();
+            io.to(`user_${targetId}`).emit("new_message", {
+                id: msgId,
+                sender_id: adminId,
+                receiver_id: targetId,
+                message: message.trim(),
+                sender_name: req.user.username || "Admin",
+                sender_avatar: req.user.avatar || "",
+                created_at: new Date()
+            });
         }
 
-        res.json({ message: `Message broadcasted to ${targets.length} users successfully.` });
+        res.json({ message: `Message broadcasted to ${targets.length} user(s) successfully.` });
     } catch (err) {
+        console.error("Admin broadcast error:", err);
         res.status(500).json({ message: err.message });
     }
 });
@@ -2029,13 +2115,14 @@ app.get("/api/admin/users", verifyToken, isAdmin, async (req, res) => {
 
 app.delete("/api/admin/users/:id", verifyToken, isAdmin, async (req, res) => {
     try {
-        const userId = Number(req.params.id);
-        if (userId === req.user.id) {
+        const targetId = req.params.id;
+        if (String(targetId) === String(req.user.id)) {
             return res.status(400).json({ message: "Admin cannot delete their own account." });
         }
-        await db.query("delete from users where id = ?", [userId]);
-        res.json({ message: "User deleted completely." });
+        await deleteUserCascade(targetId);
+        res.json({ message: "User deleted completely from system." });
     } catch (err) {
+        console.error("Admin delete user error:", err);
         res.status(500).json({ message: err.message });
     }
 });

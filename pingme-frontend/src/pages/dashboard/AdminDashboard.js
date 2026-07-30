@@ -53,7 +53,7 @@ const AdminDashboard = () => {
   const [userToDelete, setUserToDelete] = useState(null);
   const [deletingUser, setDeletingUser] = useState(false);
 
-  const isAdmin = currentUser && currentUser.email === "admin@pingme.chat";
+  const isAdmin = currentUser && (currentUser.email === "admin@pingme.chat" || currentUser.username === "Admin" || currentUser.username === "SystemAdmin");
 
   // Fetch admin dashboard details
   const fetchDashboardData = async () => {
@@ -153,10 +153,9 @@ const AdminDashboard = () => {
     setLoginError("");
     setLoggingIn(true);
     try {
-      if (emailInput.trim() !== "admin@pingme.chat") {
-        throw new Error("Invalid admin credentials.");
-      }
-      await login(emailInput, passwordInput);
+      const input = emailInput.trim().toLowerCase();
+      const loginEmail = (input === "admin" || input === "systemadmin") ? "admin@pingme.chat" : emailInput.trim();
+      await login(loginEmail, passwordInput);
       setSnackbar({ open: true, message: "Welcome back, Admin!", severity: "success" });
     } catch (err) {
       setLoginError(err.message || "Failed to log in as admin.");

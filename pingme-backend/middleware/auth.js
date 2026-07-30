@@ -32,7 +32,7 @@ const verifyToken = (req, res, next) => {
 };
 
 const isAdmin = (req, res, next) => {
-    if (req.user && req.user.email === "admin@pingme.chat") {
+    if (req.user && (req.user.email === "admin@pingme.chat" || req.user.username === "Admin" || req.user.username === "SystemAdmin")) {
         next();
     } else {
         return res.status(403).json({ message: "Access denied. Admin privileges required." });

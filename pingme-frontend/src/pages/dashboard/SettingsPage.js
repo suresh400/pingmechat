@@ -41,6 +41,27 @@ const SettingsPage = () => {
     const [suggestionText, setSuggestionText] = useState("");
     const [submittingSuggestion, setSubmittingSuggestion] = useState(false);
 
+    const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+    const [deletingAccount, setDeletingAccount] = useState(false);
+
+    const handleDeleteAccount = async () => {
+        setDeletingAccount(true);
+        try {
+            const res = await authFetch(`${API_BASE}/users/me`, { method: "DELETE" });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || "Failed to delete account.");
+            setSnackbar({ open: true, message: "Account permanently deleted. Logging out...", severity: "info" });
+            setTimeout(() => {
+                logout();
+                window.location.href = "/";
+            }, 1200);
+        } catch (err) {
+            setSnackbar({ open: true, message: err.message, severity: "error" });
+        } finally {
+            setDeletingAccount(false);
+        }
+    };
+
     const handleSubmitSuggestion = async () => {
         if (!suggestionText.trim()) {
             setSnackbar({ open: true, message: "Please type a suggestion.", severity: "error" });
@@ -438,6 +459,29 @@ const SettingsPage = () => {
                                     Submit Feature Suggestion
                                 </Button>
                             </Paper>
+
+                            {/* Danger Zone: Permanent Account Deletion */}
+                            <Paper elevation={0} sx={{ p: 4, borderRadius: 4, border: "1px solid #FF5252", bgcolor: "rgba(255,82,82,0.03)" }}>
+                                <Typography variant="subtitle1" fontWeight={800} mb={1} sx={{ color: "#FF5252", display: "flex", alignItems: "center", gap: 1 }}>
+                                    Danger Zone — Account Privacy
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: monochromaticStyles.secondary, display: "block", mb: 2 }}>
+                                    Permanently delete your account and remove all your data, messages, and profile information completely from the database. Other users will no longer be able to find or search for you.
+                                </Typography>
+                                <Button
+                                    fullWidth
+                                    variant="contained"
+                                    onClick={() => setDeleteAccountOpen(true)}
+                                    sx={{
+                                        bgcolor: "#FF5252",
+                                        color: "#fff",
+                                        borderRadius: 2, py: 1.2, fontWeight: 800, textTransform: "none",
+                                        "&:hover": { bgcolor: "#D32F2F" }
+                                    }}
+                                >
+                                    Delete Account Permanently
+                                </Button>
+                            </Paper>
                         </Stack>
                     </Grid>
                 </Grid>
@@ -505,6 +549,56 @@ const SettingsPage = () => {
                                 }}
                             >
                                 {submittingSuggestion ? <CircularProgress size={20} color="inherit" /> : "Submit"}
+                            </Button>
+                        </Stack>
+                    </Box>
+                </Dialog>
+
+                {/* Confirm Delete Account Dialog */}
+                <Dialog
+                    open={deleteAccountOpen}
+                    onClose={() => setDeleteAccountOpen(false)}
+                    PaperProps={{
+                        sx: {
+                            bgcolor: monochromaticStyles.paper,
+                            border: "1px solid #FF5252",
+                            borderRadius: 3,
+                            p: 2,
+                            maxWidth: 500,
+                            width: "100%",
+                            backgroundImage: "none"
+                        }
+                    }}
+                >
+                    <Box sx={{ p: 1 }}>
+                        <Typography variant="h6" fontWeight={800} sx={{ color: "#FF5252", mb: 1 }}>
+                            Confirm Account Deletion
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: monochromaticStyles.secondary, mb: 3 }}>
+                            Are you sure you want to permanently delete your profile? This will immediately wipe your account, chat messages, group memberships, call logs, and feedback history from the database. <strong>This action cannot be undone.</strong>
+                        </Typography>
+                        <Stack direction="row" spacing={2} justifyContent="flex-end" mt={3}>
+                            <Button
+                                onClick={() => setDeleteAccountOpen(false)}
+                                sx={{ color: monochromaticStyles.secondary, textTransform: "none", fontWeight: 700 }}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="contained"
+                                onClick={handleDeleteAccount}
+                                disabled={deletingAccount}
+                                sx={{
+                                    bgcolor: "#FF5252",
+                                    color: "#fff",
+                                    borderRadius: 2,
+                                    px: 3,
+                                    fontWeight: 800,
+                                    textTransform: "none",
+                                    "&:hover": { bgcolor: "#D32F2F" }
+                                }}
+                            >
+                                {deletingAccount ? <CircularProgress size={20} color="inherit" /> : "Delete Permanently"}
                             </Button>
                         </Stack>
                     </Box>
