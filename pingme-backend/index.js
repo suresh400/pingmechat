@@ -164,9 +164,12 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        ...corsOptions,
-        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+        origin: "*",
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        credentials: true
     },
+    transports: ["websocket", "polling"],
+    allowEIO3: true
 });
 
 const PORT = process.env.PORT || 5000;

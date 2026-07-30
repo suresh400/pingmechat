@@ -14,6 +14,11 @@ export const SocketProvider = ({ children }) => {
         if (isAuthenticated && currentUser?.id) {
             const s = io(SOCKET_URL, {
                 auth: { userId: currentUser.id },
+                transports: ["websocket", "polling"],
+                reconnection: true,
+                reconnectionAttempts: 20,
+                reconnectionDelay: 1000,
+                timeout: 20000
             });
             socketRef.current = s;
             setSocket(s);
