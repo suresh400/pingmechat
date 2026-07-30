@@ -1516,16 +1516,31 @@ app.get("/api/auth/me", verifyToken, async (req, res) => {
     }
 });
 
+// Helper: resolve the real DB user row for the current request.
+// req.user.id may be a numeric DB id (from local JWT) or a Supabase UUID string (from OTP fallback).
+async function resolveDbUser(reqUser) {
+    const numId = Number(reqUser.id);
+    if (!isNaN(numId) && numId > 0) {
+        const [rows] = await db.query("SELECT * FROM users WHERE id = ?", [numId]);
+        if (rows.length > 0) return rows[0];
+    }
+    // Fallback: look up by email (covers Supabase UUID id case)
+    if (reqUser.email) {
+        const [rows] = await db.query("SELECT * FROM users WHERE email = ?", [reqUser.email]);
+        if (rows.length > 0) return rows[0];
+    }
+    return null;
+}
+
 // Update profile
 app.put("/api/auth/profile", verifyToken, async (req, res) => {
     const { username, bio, avatar } = req.body;
     try {
-        const [currentUsers] = await db.query("SELECT * FROM users WHERE id = ?", [req.user.id]);
-        if (currentUsers.length === 0) return res.status(404).json({ message: "User not found." });
-        const current = currentUsers[0];
+        const current = await resolveDbUser(req.user);
+        if (!current) return res.status(404).json({ message: "User not found." });
 
         if (username && username.trim() !== current.username) {
-            const [existing] = await db.query("SELECT id FROM users WHERE username = ? AND id != ?", [username.trim(), req.user.id]);
+            const [existing] = await db.query("SELECT id FROM users WHERE username = ? AND id != ?", [username.trim(), current.id]);
             if (existing.length > 0)
                 return res.status(409).json({ message: "Username already taken." });
         }
@@ -1536,9 +1551,9 @@ app.put("/api/auth/profile", verifyToken, async (req, res) => {
 
         await db.query(
             "UPDATE users SET username = ?, bio = ?, avatar = ? WHERE id = ?",
-            [newUsername, newBio, newAvatar, req.user.id]
+            [newUsername, newBio, newAvatar, current.id]
         );
-        const [updated] = await db.query("SELECT id, username, email, avatar, bio, is_online, last_seen FROM users WHERE id = ?", [req.user.id]);
+        const [updated] = await db.query("SELECT id, username, email, avatar, bio, is_online, last_seen FROM users WHERE id = ?", [current.id]);
         res.json({ message: "Profile updated.", user: updated[0] });
     } catch (err) {
         console.error("Profile update error:", err);
@@ -1550,12 +1565,11 @@ app.put("/api/auth/profile", verifyToken, async (req, res) => {
 app.put("/api/users/profile", verifyToken, async (req, res) => {
     const { username, bio, avatar } = req.body;
     try {
-        const [currentUsers] = await db.query("SELECT * FROM users WHERE id = ?", [req.user.id]);
-        if (currentUsers.length === 0) return res.status(404).json({ message: "User not found." });
-        const current = currentUsers[0];
+        const current = await resolveDbUser(req.user);
+        if (!current) return res.status(404).json({ message: "User not found." });
 
         if (username && username.trim() !== current.username) {
-            const [existing] = await db.query("SELECT id FROM users WHERE username = ? AND id != ?", [username.trim(), req.user.id]);
+            const [existing] = await db.query("SELECT id FROM users WHERE username = ? AND id != ?", [username.trim(), current.id]);
             if (existing.length > 0)
                 return res.status(409).json({ message: "Username already taken." });
         }
@@ -1566,9 +1580,9 @@ app.put("/api/users/profile", verifyToken, async (req, res) => {
 
         await db.query(
             "UPDATE users SET username = ?, bio = ?, avatar = ? WHERE id = ?",
-            [newUsername, newBio, newAvatar, req.user.id]
+            [newUsername, newBio, newAvatar, current.id]
         );
-        const [updated] = await db.query("SELECT id, username, email, avatar, bio, is_online, last_seen FROM users WHERE id = ?", [req.user.id]);
+        const [updated] = await db.query("SELECT id, username, email, avatar, bio, is_online, last_seen FROM users WHERE id = ?", [current.id]);
         res.json({ message: "Profile updated.", user: updated[0] });
     } catch (err) {
         console.error("Profile update error:", err);
@@ -1579,8 +1593,9 @@ app.put("/api/users/profile", verifyToken, async (req, res) => {
 // Permanent Self-Account Deletion
 app.delete("/api/users/me", verifyToken, async (req, res) => {
     try {
-        const userId = req.user.id;
-        await deleteUserCascade(userId);
+        const dbUser = await resolveDbUser(req.user);
+        if (!dbUser) return res.status(404).json({ message: "User not found." });
+        await deleteUserCascade(dbUser.id);
         res.json({ message: "Account and all associated data permanently deleted." });
     } catch (err) {
         console.error("Account deletion error:", err);
@@ -2428,16 +2443,20 @@ app.post("/api/groups", verifyToken, async (req, res) => {
     const { name, memberUsernames } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ message: "Group name required." });
     try {
+        // Resolve real DB user (handles numeric id AND Supabase UUID string ids)
+        const creator = await resolveDbUser(req.user);
+        if (!creator) return res.status(401).json({ message: "User session invalid. Please log in again." });
+
         const groupName = name.trim();
         const avatarUrl = `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(groupName)}`;
         const [groupResult] = await db.query(
             "INSERT INTO groups_table (name, created_by, avatar) VALUES (?, ?, ?)",
-            [groupName, req.user.id, avatarUrl]
+            [groupName, creator.id, avatarUrl]
         );
         const groupId = groupResult.insertId;
 
         // Add creator
-        await db.query("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)", [groupId, req.user.id]);
+        await db.query("INSERT INTO group_members (group_id, user_id) VALUES (?, ?)", [groupId, creator.id]);
 
         // Add members by username, email, or ID
         if (Array.isArray(memberUsernames) && memberUsernames.length > 0) {

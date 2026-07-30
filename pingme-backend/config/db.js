@@ -504,16 +504,28 @@ async function handleSelect(sl, p) {
   }
 
   if (sl.includes("last_seen from users where id")) {
-    const u = await User.findOne({ id: Number(p[0]) }).lean();
+    const numId = Number(p[0]);
+    const u = isNaN(numId) ? await User.findOne({ $or: [{ email: p[0] }, { username: p[0] }] }).lean()
+                           : await User.findOne({ id: numId }).lean();
     if (!u) return R([]);
     return R([{ id: u.id, username: u.username, email: u.email, avatar: u.avatar, bio: u.bio, show_email: u.show_email !== false, is_online: u.is_online, last_seen: u.last_seen }]);
   }
 
   // Full public profile for a single user
   if (sl.includes("show_email from users where id")) {
-    const u = await User.findOne({ id: Number(p[0]) }).lean();
+    const numId = Number(p[0]);
+    const u = isNaN(numId) ? await User.findOne({ $or: [{ email: p[0] }, { username: p[0] }] }).lean()
+                           : await User.findOne({ id: numId }).lean();
     if (!u) return R([]);
     return R([{ id: u.id, username: u.username, email: u.email, avatar: u.avatar, bio: u.bio, show_email: u.show_email !== false, is_online: u.is_online, last_seen: u.last_seen }]);
+  }
+
+  // Generic SELECT * FROM users WHERE id = ? (used by profile update routes)
+  if (/select \* from users where id/.test(sl)) {
+    const numId = Number(p[0]);
+    const u = isNaN(numId) ? await User.findOne({ $or: [{ email: p[0] }, { username: p[0] }] }).lean()
+                           : await User.findOne({ id: numId }).lean();
+    return R(u ? [u] : []);
   }
 
   if (sl.includes("count(*) as total from users")) {
@@ -806,23 +818,44 @@ async function handleInsert(sl, p) {
 
 // ── SQL-to-MongoDB UPDATE Handler ───────────────────────────────────────────
 
+// Helper: resolve a user document by id (numeric) or fall back to email/username for Supabase UUID ids
+async function resolveUserById(rawId) {
+  const numId = Number(rawId);
+  if (!isNaN(numId) && numId > 0) {
+    const u = await User.findOne({ id: numId }).lean();
+    if (u) return u;
+  }
+  // Fallback: rawId might be a UUID string — try email derived from Supabase phone format or direct match
+  if (typeof rawId === "string" && rawId.length > 4) {
+    const u = await User.findOne({ $or: [{ email: rawId }, { username: rawId }] }).lean();
+    if (u) return u;
+  }
+  return null;
+}
+
 async function handleUpdate(sl, p) {
   if (sl.includes("update users set is_online = 0") && !sl.includes("where")) {
     const res = await User.updateMany({}, { is_online: 0 });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update users set is_online = 1")) {
-    const res = await User.updateOne({ id: Number(p[0]) }, { is_online: 1 });
+    const u = await resolveUserById(p[0]);
+    if (!u) return [{ affectedRows: 0 }];
+    const res = await User.updateOne({ id: u.id }, { is_online: 1 });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update users set is_online = 0, last_seen")) {
-    const res = await User.updateOne({ id: Number(p[0]) }, { is_online: 0, last_seen: new Date() });
+    const u = await resolveUserById(p[0]);
+    if (!u) return [{ affectedRows: 0 }];
+    const res = await User.updateOne({ id: u.id }, { is_online: 0, last_seen: new Date() });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update users set username") && sl.includes("bio") && sl.includes("avatar")) {
-    // Use $set explicitly so empty string bio is saved (not treated as falsy)
+    // p[3] is the user's id — may be numeric DB id or Supabase UUID string
+    const u = await resolveUserById(p[3]);
+    if (!u) return [{ affectedRows: 0 }];
     const res = await User.updateOne(
-      { id: Number(p[3]) },
+      { id: u.id },
       { $set: { username: p[0], bio: p[1] !== undefined ? p[1] : "", avatar: p[2] } }
     );
     return [{ affectedRows: res.modifiedCount }];
