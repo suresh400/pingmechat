@@ -42,7 +42,7 @@ async function nextId(seqName) {
 }
 
 const UserSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
+  id: { type: mongoose.Schema.Types.Mixed, unique: true },
   username: { type: String, unique: true },
   email: { type: String, unique: true },
   password: { type: String },
@@ -56,9 +56,9 @@ const UserSchema = new mongoose.Schema({
 const User = mongoose.model("User", UserSchema);
 
 const MessageSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
-  sender_id: { type: Number },
-  receiver_id: { type: Number },
+  id: { type: mongoose.Schema.Types.Mixed, unique: true },
+  sender_id: { type: mongoose.Schema.Types.Mixed },
+  receiver_id: { type: mongoose.Schema.Types.Mixed },
   message: { type: String },
   is_read: { type: Boolean, default: false },
   self_destruct_seconds: { type: Number, default: 0 },
@@ -67,26 +67,26 @@ const MessageSchema = new mongoose.Schema({
 const Message = mongoose.model("Message", MessageSchema);
 
 const GroupSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
+  id: { type: mongoose.Schema.Types.Mixed, unique: true },
   name: { type: String },
-  created_by: { type: Number },
+  created_by: { type: mongoose.Schema.Types.Mixed },
   avatar: { type: String },
   created_at: { type: Date, default: Date.now }
 });
 const Group = mongoose.model("Group", GroupSchema);
 
 const GroupMemberSchema = new mongoose.Schema({
-  group_id: { type: Number },
-  user_id: { type: Number },
+  group_id: { type: mongoose.Schema.Types.Mixed },
+  user_id: { type: mongoose.Schema.Types.Mixed },
   joined_at: { type: Date, default: Date.now }
 });
 GroupMemberSchema.index({ group_id: 1, user_id: 1 }, { unique: true });
 const GroupMember = mongoose.model("GroupMember", GroupMemberSchema);
 
 const GroupMessageSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
-  group_id: { type: Number },
-  sender_id: { type: Number },
+  id: { type: mongoose.Schema.Types.Mixed, unique: true },
+  group_id: { type: mongoose.Schema.Types.Mixed },
+  sender_id: { type: mongoose.Schema.Types.Mixed },
   message: { type: String },
   self_destruct_seconds: { type: Number, default: 0 },
   created_at: { type: Date, default: Date.now }
@@ -94,10 +94,10 @@ const GroupMessageSchema = new mongoose.Schema({
 const GroupMessage = mongoose.model("GroupMessage", GroupMessageSchema);
 
 const CallLogSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
-  caller_id: { type: Number },
-  receiver_id: { type: Number },
-  group_id: { type: Number },
+  id: { type: mongoose.Schema.Types.Mixed, unique: true },
+  caller_id: { type: mongoose.Schema.Types.Mixed },
+  receiver_id: { type: mongoose.Schema.Types.Mixed },
+  group_id: { type: mongoose.Schema.Types.Mixed },
   call_type: { type: String },
   status: { type: String },
   duration_seconds: { type: Number, default: 0 },
@@ -107,16 +107,16 @@ const CallLogSchema = new mongoose.Schema({
 const CallLog = mongoose.model("CallLog", CallLogSchema);
 
 const CallParticipantSchema = new mongoose.Schema({
-  call_log_id: { type: Number },
-  user_id: { type: Number },
+  call_log_id: { type: mongoose.Schema.Types.Mixed },
+  user_id: { type: mongoose.Schema.Types.Mixed },
   joined_at: { type: Date, default: Date.now }
 });
 CallParticipantSchema.index({ call_log_id: 1, user_id: 1 }, { unique: true });
 const CallParticipant = mongoose.model("CallParticipant", CallParticipantSchema);
 
 const OtpSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
-  user_id: { type: Number },
+  id: { type: mongoose.Schema.Types.Mixed, unique: true },
+  user_id: { type: mongoose.Schema.Types.Mixed },
   email: { type: String },
   otp_hash: { type: String },
   expires_at: { type: Date },
@@ -127,16 +127,16 @@ const OtpSchema = new mongoose.Schema({
 const Otp = mongoose.model("Otp", OtpSchema);
 
 const BlockedUserSchema = new mongoose.Schema({
-  blocker_id: { type: Number },
-  blocked_id: { type: Number },
+  blocker_id: { type: mongoose.Schema.Types.Mixed },
+  blocked_id: { type: mongoose.Schema.Types.Mixed },
   created_at: { type: Date, default: Date.now }
 });
 BlockedUserSchema.index({ blocker_id: 1, blocked_id: 1 }, { unique: true });
 const BlockedUser = mongoose.model("BlockedUser", BlockedUserSchema);
 
 const FeedbackSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
-  user_id: { type: Number },
+  id: { type: mongoose.Schema.Types.Mixed, unique: true },
+  user_id: { type: mongoose.Schema.Types.Mixed },
   rating: { type: Number },
   working_well: { type: String },
   needs_change: { type: String },
@@ -145,7 +145,7 @@ const FeedbackSchema = new mongoose.Schema({
 const Feedback = mongoose.model("Feedback", FeedbackSchema);
 
 const AttachmentSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
+  id: { type: mongoose.Schema.Types.Mixed, unique: true },
   filename: { type: String, unique: true },
   mime_type: { type: String },
   url: { type: String },
@@ -154,12 +154,12 @@ const AttachmentSchema = new mongoose.Schema({
 const Attachment = mongoose.model("Attachment", AttachmentSchema);
 
 const TaskSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
+  id: { type: mongoose.Schema.Types.Mixed, unique: true },
   chat_id: { type: String }, // Can be group_id or private contact_id string
   title: { type: String },
   description: { type: String },
   status: { type: String, enum: ["todo", "in_progress", "done"], default: "todo" },
-  assigned_to: { type: Number, default: null }, // User ID
+  assigned_to: { type: mongoose.Schema.Types.Mixed, default: null }, // User ID
   created_at: { type: Date, default: Date.now }
 });
 const Task = mongoose.model("Task", TaskSchema);
@@ -171,12 +171,13 @@ const SettingSchema = new mongoose.Schema({
 const Setting = mongoose.model("Setting", SettingSchema);
 
 const ReportSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
-  reporter_id: { type: Number },
-  reported_id: { type: Number },
+  id: { type: mongoose.Schema.Types.Mixed, unique: true },
+  reporter_id: { type: mongoose.Schema.Types.Mixed },
+  reported_id: { type: mongoose.Schema.Types.Mixed },
   reason: { type: String },
   created_at: { type: Date, default: Date.now }
 });
+const Report = mongoose.model("Report", ReportSchema);
 const Report = mongoose.model("Report", ReportSchema);
 
 const SuggestionSchema = new mongoose.Schema({
@@ -276,7 +277,10 @@ mongoose.connection.once("open", () => {
 // ── SQL-to-MongoDB Complex Queries ──────────────────────────────────────────
 
 async function activeContacts(userId) {
-  const uid = Number(userId);
+  const user = await resolveUserById(userId);
+  const uid = user ? user.id : (isNaN(Number(userId)) ? null : Number(userId));
+  if (!uid) return [];
+
   const messages = await Message.find({ $or: [{ sender_id: uid }, { receiver_id: uid }] }).lean();
   const callLogs = await CallLog.find({ group_id: null, $or: [{ caller_id: uid }, { receiver_id: uid }] }).lean();
 
@@ -315,10 +319,12 @@ async function activeContacts(userId) {
 }
 
 async function messageHistory(uid, cid) {
-  const u = Number(uid);
-  const c = Number(cid);
+  const userU = await resolveUserById(uid);
+  const userC = await resolveUserById(cid);
+  const u = userU ? userU.id : (isNaN(Number(uid)) ? null : Number(uid));
+  const c = userC ? userC.id : (isNaN(Number(cid)) ? null : Number(cid));
 
-  if (isNaN(u) || isNaN(c)) {
+  if (!u || !c) {
     return [];
   }
 
@@ -393,7 +399,8 @@ async function messageHistory(uid, cid) {
 }
 
 async function callLogWithUsers(id) {
-  const cl = await CallLog.findOne({ id: Number(id) }).lean();
+  const numId = isNaN(Number(id)) ? 0 : Number(id);
+  const cl = await CallLog.findOne({ id: numId }).lean();
   if (!cl) return [];
   const u1 = await User.findOne({ id: cl.caller_id }).lean() || {};
   const u2 = cl.receiver_id ? (await User.findOne({ id: cl.receiver_id }).lean() || {}) : null;
@@ -410,7 +417,10 @@ async function callLogWithUsers(id) {
 }
 
 async function callHistory(userId) {
-  const uid = Number(userId);
+  const user = await resolveUserById(userId);
+  const uid = user ? user.id : (isNaN(Number(userId)) ? null : Number(userId));
+  if (!uid) return [];
+
   const myGroupMemberships = await GroupMember.find({ user_id: uid }).lean();
   const myGroups = myGroupMemberships.map(m => m.group_id);
 
