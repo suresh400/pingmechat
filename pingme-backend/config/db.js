@@ -479,7 +479,7 @@ async function handleSelect(sl, p) {
   }
 
   if (sl.includes("from call_participants") && sl.includes("join users")) {
-    const ids = p.map(Number);
+    const ids = safeIds(p);
     const participants = await CallParticipant.find({ call_log_id: { $in: ids } }).lean();
     const results = [];
     for (const cp of participants) {
@@ -495,19 +495,19 @@ async function handleSelect(sl, p) {
   if (/select \* from users where email/.test(sl))                      return R(await User.find({ email: p[0] }).lean());
   if (/select id, username from users where email/.test(sl))            return R(await User.find({ email: p[0] }).select("id username").lean());
   if (/select id from users where email/.test(sl))                      return R(await User.find({ email: p[0] }).select("id").lean());
-  if (/select id from users where username/.test(sl) && sl.includes("and id !=")) return R(await User.find({ username: p[0], id: { $ne: Number(p[1]) } }).select("id").lean());
+  if (/select id from users where username/.test(sl) && sl.includes("and id !=")) return R(await User.find({ username: p[0], id: { $ne: safeId(p[1]) } }).select("id").lean());
   if (/select id from users where username/.test(sl))                   return R(await User.find({ username: p[0] }).select("id").lean());
-  if (/select password from users/.test(sl))                            return R(await User.find({ id: Number(p[0]) }).select("password").lean());
+  if (/select password from users/.test(sl))                            return R(await User.find({ id: safeId(p[0]) }).select("password").lean());
   if (/select id, username, avatar from users where username/.test(sl)) return R(await User.find({ username: p[0] }).select("id username avatar").lean());
 
   if (sl.includes("from users where id in")) {
-    const ids = p.flat().map(Number);
+    const ids = safeIds(p.flat());
     return R(await User.find({ id: { $in: ids } }).select("id username avatar").lean());
   }
 
   if (sl.includes("like") && sl.includes("from users")) {
     const term = p[0].replace(/%/g, "");
-    const excl = Number(p[1]);
+    const excl = safeId(p[1]);
     return R(await User.find({
       username: { $regex: new RegExp(term, "i") },
       id: { $ne: excl }
@@ -515,20 +515,20 @@ async function handleSelect(sl, p) {
   }
 
   if (sl.includes("username, email, avatar from users where id")) {
-    const u = await User.findOne({ id: Number(p[0]) }).lean();
+    const u = await User.findOne({ id: safeId(p[0]) }).lean();
     if (!u) return R([]);
     return R([{ username: u.username, email: u.email, avatar: u.avatar }]);
   }
 
   if (sl.includes("created_at from users where id")) {
-    const u = await User.findOne({ id: Number(p[0]) }).lean();
+    const u = await User.findOne({ id: safeId(p[0]) }).lean();
     if (!u) return R([]);
     return R([{ id: u.id, username: u.username, email: u.email, avatar: u.avatar, bio: u.bio, show_email: u.show_email !== false, created_at: u.created_at }]);
   }
 
   if (sl.includes("last_seen from users where id")) {
-    const numId = Number(p[0]);
-    const u = isNaN(numId) ? await User.findOne({ $or: [{ email: p[0] }, { username: p[0] }] }).lean()
+    const numId = safeId(p[0]);
+    const u = (typeof numId !== "number" || numId === 0) ? await User.findOne({ $or: [{ email: p[0] }, { username: p[0] }] }).lean()
                            : await User.findOne({ id: numId }).lean();
     if (!u) return R([]);
     return R([{ id: u.id, username: u.username, email: u.email, avatar: u.avatar, bio: u.bio, show_email: u.show_email !== false, is_online: u.is_online, last_seen: u.last_seen }]);
@@ -536,8 +536,8 @@ async function handleSelect(sl, p) {
 
   // Full public profile for a single user
   if (sl.includes("show_email from users where id")) {
-    const numId = Number(p[0]);
-    const u = isNaN(numId) ? await User.findOne({ $or: [{ email: p[0] }, { username: p[0] }] }).lean()
+    const numId = safeId(p[0]);
+    const u = (typeof numId !== "number" || numId === 0) ? await User.findOne({ $or: [{ email: p[0] }, { username: p[0] }] }).lean()
                            : await User.findOne({ id: numId }).lean();
     if (!u) return R([]);
     return R([{ id: u.id, username: u.username, email: u.email, avatar: u.avatar, bio: u.bio, show_email: u.show_email !== false, is_online: u.is_online, last_seen: u.last_seen }]);
@@ -545,8 +545,8 @@ async function handleSelect(sl, p) {
 
   // Generic SELECT * FROM users WHERE id = ? (used by profile update routes)
   if (/select \* from users where id/.test(sl)) {
-    const numId = Number(p[0]);
-    const u = isNaN(numId) ? await User.findOne({ $or: [{ email: p[0] }, { username: p[0] }] }).lean()
+    const numId = safeId(p[0]);
+    const u = (typeof numId !== "number" || numId === 0) ? await User.findOne({ $or: [{ email: p[0] }, { username: p[0] }] }).lean()
                            : await User.findOne({ id: numId }).lean();
     return R(u ? [u] : []);
   }
@@ -562,7 +562,7 @@ async function handleSelect(sl, p) {
   }
 
   if (sl.includes("select * from messages where receiver_id = ?")) {
-    const adminId = Number(p[0]);
+    const adminId = safeId(p[0]);
     const msgs = await Message.find({ receiver_id: adminId }).sort({ created_at: -1 }).lean();
     return R(msgs);
   }
@@ -588,20 +588,20 @@ async function handleSelect(sl, p) {
 
   // messages
   if (sl.includes("count(*) as total from messages")) {
-    const total = await Message.countDocuments({ receiver_id: Number(p[0]), is_read: false });
+    const total = await Message.countDocuments({ receiver_id: safeId(p[0]), is_read: false });
     return R([{ total }]);
   }
 
   // blocked
   if (sl.includes("select blocked_id from blocked_users")) {
-    const rows = await BlockedUser.find({ blocker_id: Number(p[0]) }).select("blocked_id").lean();
+    const rows = await BlockedUser.find({ blocker_id: safeId(p[0]) }).select("blocked_id").lean();
     return R(rows);
   }
   if (sl.includes("from blocked_users")) {
     const rows = await BlockedUser.find({
       $or: [
-        { blocker_id: Number(p[0]), blocked_id: Number(p[1]) },
-        { blocker_id: Number(p[2]), blocked_id: Number(p[3]) }
+        { blocker_id: safeId(p[0]), blocked_id: safeId(p[1]) },
+        { blocker_id: safeId(p[2]), blocked_id: safeId(p[3]) }
       ]
     }).lean();
     return R(rows);
@@ -609,18 +609,18 @@ async function handleSelect(sl, p) {
 
   // groups
   if (sl.includes("from groups_table g") && sl.includes("join group_members")) {
-    const memberships = await GroupMember.find({ user_id: Number(p[0]) }).lean();
+    const memberships = await GroupMember.find({ user_id: safeId(p[0]) }).lean();
     const gids = memberships.map(m => m.group_id);
     const groups = await Group.find({ id: { $in: gids } }).sort({ created_at: -1 }).lean();
     return R(groups);
   }
 
   if (/select \* from groups_table where id/.test(sl)) {
-    return R(await Group.find({ id: Number(p[0]) }).lean());
+    return R(await Group.find({ id: safeId(p[0]) }).lean());
   }
 
   if (sl.includes("from group_messages") && sl.includes("join users")) {
-    const groupId = Number(p[0]);
+    const groupId = safeId(p[0]);
     // Clean up expired group messages on the fly
     const now = Date.now();
     try {
@@ -648,19 +648,19 @@ async function handleSelect(sl, p) {
   }
 
   if (sl.includes("select user_id from group_members where group_id")) {
-    const rows = await GroupMember.find({ group_id: Number(p[0]) }).select("user_id").lean();
+    const rows = await GroupMember.find({ group_id: safeId(p[0]) }).select("user_id").lean();
     return R(rows);
   }
 
   if (sl.includes("from group_members gm") && sl.includes("join users")) {
-    const members = await GroupMember.find({ group_id: Number(p[0]) }).lean();
+    const members = await GroupMember.find({ group_id: safeId(p[0]) }).lean();
     const uids = members.map(m => m.user_id);
     const users = await User.find({ id: { $in: uids } }).select("id username avatar bio is_online last_seen").lean();
     return R(users);
   }
 
   if (/select \* from group_members where group_id/.test(sl) && sl.includes("and user_id")) {
-    return R(await GroupMember.find({ group_id: Number(p[0]), user_id: Number(p[1]) }).lean());
+    return R(await GroupMember.find({ group_id: safeId(p[0]), user_id: safeId(p[1]) }).lean());
   }
 
   // OTPs
@@ -669,11 +669,11 @@ async function handleSelect(sl, p) {
     return R(rec ? [rec] : []);
   }
   if (sl.includes("from password_reset_otps") && sl.includes("and user_id")) {
-    return R(await Otp.find({ id: Number(p[0]), user_id: Number(p[1]), used: false }).lean());
+    return R(await Otp.find({ id: safeId(p[0]), user_id: safeId(p[1]), used: false }).lean());
   }
 
   if (sl.includes("from feedback")) {
-    return R(await Feedback.find({ user_id: Number(p[0]) }).lean());
+    return R(await Feedback.find({ user_id: safeId(p[0]) }).lean());
   }
 
   throw new Error(`[DB] Unhandled SELECT: ${sl.substring(0, 120)}`);
@@ -705,8 +705,8 @@ async function handleInsert(sl, p) {
     const id = await nextId("feedback");
     const feedback = new Feedback({
       id,
-      user_id: Number(p[0]),
-      rating: Number(p[1]),
+      user_id: safeId(p[0]),
+      rating: safeId(p[1]),
       working_well: p[2],
       needs_change: p[3],
       submitted_at: new Date()
@@ -719,11 +719,11 @@ async function handleInsert(sl, p) {
     const id = await nextId("messages");
     const message = new Message({
       id,
-      sender_id: Number(p[0]),
-      receiver_id: Number(p[1]),
+      sender_id: safeId(p[0]),
+      receiver_id: safeId(p[1]),
       message: p[2],
       is_read: false,
-      self_destruct_seconds: p[3] !== undefined ? Number(p[3]) : 0,
+      self_destruct_seconds: p[3] !== undefined ? safeId(p[3]) : 0,
       created_at: new Date()
     });
     await message.save();
@@ -734,10 +734,10 @@ async function handleInsert(sl, p) {
     const id = await nextId("group_messages");
     const msg = new GroupMessage({
       id,
-      group_id: Number(p[0]),
-      sender_id: Number(p[1]),
+      group_id: safeId(p[0]),
+      sender_id: safeId(p[1]),
       message: p[2],
-      self_destruct_seconds: p[3] !== undefined ? Number(p[3]) : 0,
+      self_destruct_seconds: p[3] !== undefined ? safeId(p[3]) : 0,
       created_at: new Date()
     });
     await msg.save();
@@ -749,7 +749,7 @@ async function handleInsert(sl, p) {
     const group = new Group({
       id,
       name: p[0],
-      created_by: Number(p[1]),
+      created_by: safeId(p[1]),
       avatar: p[2],
       created_at: new Date()
     });
@@ -758,8 +758,8 @@ async function handleInsert(sl, p) {
   }
 
   if (sl.includes("into group_members")) {
-    const gid = Number(p[0]);
-    const uid = Number(p[1]);
+    const gid = safeId(p[0]);
+    const uid = safeId(p[1]);
     const exists = await GroupMember.findOne({ group_id: gid, user_id: uid });
     if (exists && sl.includes("insert ignore")) return [{ affectedRows: 0 }];
 
@@ -774,8 +774,8 @@ async function handleInsert(sl, p) {
     if (sl.includes("group_id")) {
       entry = new CallLog({
         id,
-        caller_id: Number(p[0]),
-        group_id: Number(p[1]),
+        caller_id: safeId(p[0]),
+        group_id: safeId(p[1]),
         call_type: p[2],
         status: "calling",
         duration_seconds: 0,
@@ -785,8 +785,8 @@ async function handleInsert(sl, p) {
     } else {
       entry = new CallLog({
         id,
-        caller_id: Number(p[0]),
-        receiver_id: Number(p[1]),
+        caller_id: safeId(p[0]),
+        receiver_id: safeId(p[1]),
         call_type: p[2],
         status: "calling",
         duration_seconds: 0,
@@ -799,8 +799,8 @@ async function handleInsert(sl, p) {
   }
 
   if (sl.includes("into call_participants")) {
-    const cid = Number(p[0]);
-    const uid = Number(p[1]);
+    const cid = safeId(p[0]);
+    const uid = safeId(p[1]);
     const exists = await CallParticipant.findOne({ call_log_id: cid, user_id: uid });
     if (exists && sl.includes("insert ignore")) return [{ affectedRows: 0 }];
 
@@ -813,7 +813,7 @@ async function handleInsert(sl, p) {
     const id = await nextId("otps");
     const otp = new Otp({
       id,
-      user_id: Number(p[0]),
+      user_id: safeId(p[0]),
       email: p[1],
       otp_hash: p[2],
       expires_at: new Date(p[3]),
@@ -826,8 +826,8 @@ async function handleInsert(sl, p) {
   }
 
   if (sl.includes("into blocked_users")) {
-    const bid = Number(p[0]);
-    const blkid = Number(p[1]);
+    const bid = safeId(p[0]);
+    const blkid = safeId(p[1]);
     const exists = await BlockedUser.findOne({ blocker_id: bid, blocked_id: blkid });
     if (exists && sl.includes("insert ignore")) return [{ affectedRows: 0 }];
 
@@ -884,20 +884,20 @@ async function handleUpdate(sl, p) {
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update users set show_email")) {
-    const res = await User.updateOne({ id: Number(p[1]) }, { $set: { show_email: Boolean(p[0]) } });
+    const res = await User.updateOne({ id: safeId(p[1]) }, { $set: { show_email: Boolean(p[0]) } });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update users set password") && sl.includes("where id")) {
-    const res = await User.updateOne({ id: Number(p[1]) }, { password: p[0] });
+    const res = await User.updateOne({ id: safeId(p[1]) }, { password: p[0] });
     return [{ affectedRows: res.modifiedCount }];
   }
 
   if (sl.includes("update messages set is_read = 1 where id")) {
-    const res = await Message.updateOne({ id: Number(p[0]) }, { is_read: true });
+    const res = await Message.updateOne({ id: safeId(p[0]) }, { is_read: true });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update messages set is_read = 1 where sender_id")) {
-    const res = await Message.updateMany({ sender_id: Number(p[0]), receiver_id: Number(p[1]), is_read: false }, { is_read: true });
+    const res = await Message.updateMany({ sender_id: safeId(p[0]), receiver_id: safeId(p[1]), is_read: false }, { is_read: true });
     return [{ affectedRows: res.modifiedCount }];
   }
 
@@ -906,44 +906,44 @@ async function handleUpdate(sl, p) {
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update password_reset_otps set used = true where user_id")) {
-    const res = await Otp.updateMany({ user_id: Number(p[0]), used: false }, { used: true });
+    const res = await Otp.updateMany({ user_id: safeId(p[0]), used: false }, { used: true });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update password_reset_otps set used = true where id")) {
-    const res = await Otp.updateOne({ id: Number(p[0]) }, { used: true });
+    const res = await Otp.updateOne({ id: safeId(p[0]) }, { used: true });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update password_reset_otps set attempts = attempts + 1")) {
-    const res = await Otp.updateOne({ id: Number(p[0]) }, { $inc: { attempts: 1 } });
+    const res = await Otp.updateOne({ id: safeId(p[0]) }, { $inc: { attempts: 1 } });
     return [{ affectedRows: res.modifiedCount }];
   }
 
   if (sl.includes("update call_logs") && sl.includes("group_id") && sl.includes("caller_id") && sl.includes("'missed'")) {
-    const res = await CallLog.updateMany({ group_id: Number(p[0]), caller_id: Number(p[1]), status: "calling" }, { status: "missed", ended_at: new Date() });
+    const res = await CallLog.updateMany({ group_id: safeId(p[0]), caller_id: safeId(p[1]), status: "calling" }, { status: "missed", ended_at: new Date() });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("update call_logs") && sl.includes("'accepted'") && sl.includes("and status = 'calling'")) {
-    const res = await CallLog.updateOne({ id: Number(p[0]), status: "calling" }, { status: "accepted", ended_at: new Date() });
+    const res = await CallLog.updateOne({ id: safeId(p[0]), status: "calling" }, { status: "accepted", ended_at: new Date() });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("set status='missed'")) {
-    const res = await CallLog.updateOne({ id: Number(p[0]) }, { status: "missed", ended_at: new Date() });
+    const res = await CallLog.updateOne({ id: safeId(p[0]) }, { status: "missed", ended_at: new Date() });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("set status='declined'")) {
-    const res = await CallLog.updateOne({ id: Number(p[0]) }, { status: "declined", ended_at: new Date() });
+    const res = await CallLog.updateOne({ id: safeId(p[0]) }, { status: "declined", ended_at: new Date() });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("set status='accepted'")) {
-    const res = await CallLog.updateOne({ id: Number(p[0]) }, { status: "accepted" });
+    const res = await CallLog.updateOne({ id: safeId(p[0]) }, { status: "accepted" });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("set status = ?, duration_seconds")) {
-    const res = await CallLog.updateOne({ id: Number(p[2]) }, { status: p[0], duration_seconds: Number(p[1]), ended_at: new Date() });
+    const res = await CallLog.updateOne({ id: safeId(p[2]) }, { status: p[0], duration_seconds: safeId(p[1]), ended_at: new Date() });
     return [{ affectedRows: res.modifiedCount }];
   }
   if (sl.includes("set status = 'accepted', duration_seconds")) {
-    const res = await CallLog.updateOne({ id: Number(p[1]) }, { status: "accepted", duration_seconds: Number(p[0]), ended_at: new Date() });
+    const res = await CallLog.updateOne({ id: safeId(p[1]) }, { status: "accepted", duration_seconds: safeId(p[0]), ended_at: new Date() });
     return [{ affectedRows: res.modifiedCount }];
   }
 
@@ -954,7 +954,7 @@ async function handleUpdate(sl, p) {
 
 async function handleDelete(sl, p) {
   if (sl.includes("delete from users where id = ?")) {
-    const userId = Number(p[0]);
+    const userId = safeId(p[0]);
     const res = await User.deleteOne({ id: userId });
     await Message.deleteMany({ $or: [{ sender_id: userId }, { receiver_id: userId }] });
     await GroupMember.deleteMany({ user_id: userId });
@@ -965,8 +965,8 @@ async function handleDelete(sl, p) {
     return [{ affectedRows: res.deletedCount }];
   }
   if (sl.includes("from messages")) {
-    const u = Number(p[0]);
-    const c = Number(p[1]);
+    const u = safeId(p[0]);
+    const c = safeId(p[1]);
     const res = await Message.deleteMany({
       $or: [
         { sender_id: u, receiver_id: c },
@@ -976,8 +976,8 @@ async function handleDelete(sl, p) {
     return [{ affectedRows: res.deletedCount }];
   }
   if (sl.includes("from call_logs")) {
-    const u = Number(p[0]);
-    const c = Number(p[1]);
+    const u = safeId(p[0]);
+    const c = safeId(p[1]);
     const res = await CallLog.deleteMany({
       group_id: null,
       $or: [
@@ -988,7 +988,7 @@ async function handleDelete(sl, p) {
     return [{ affectedRows: res.deletedCount }];
   }
   if (sl.includes("from blocked_users")) {
-    const res = await BlockedUser.deleteOne({ blocker_id: Number(p[0]), blocked_id: Number(p[1]) });
+    const res = await BlockedUser.deleteOne({ blocker_id: safeId(p[0]), blocked_id: safeId(p[1]) });
     return [{ affectedRows: res.deletedCount }];
   }
   throw new Error(`[DB] Unhandled DELETE: ${sl.substring(0, 100)}`);
